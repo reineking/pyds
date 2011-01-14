@@ -5,9 +5,9 @@ Created on Nov 28, 2009
 '''
 
 import unittest
-from math import log, sqrt
+from math import log
 from itertools import product
-from util.dempster_shafer import MassFunction
+from dempster_shafer import MassFunction
 
 
 class TestDempsterShafer(unittest.TestCase):

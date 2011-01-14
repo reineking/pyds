@@ -9,7 +9,7 @@ from numpy import arange, zeros #@UnresolvedImport
 from numpy.random import binomial #@UnresolvedImport
 from time import clock #@UnresolvedImport
 from matplotlib.pyplot import figure  #@UnresolvedImport
-from util.dempster_shafer import MassFunction
+from dempster_shafer import MassFunction
 
 def binomial_distribution(c, n, p):
     m = MassFunction()
