@@ -205,11 +205,8 @@ class MassFunction(dict):
                     hyp = set()
                     for k in xrange(len(compatible_likelihoods)):
                         l = compatible_likelihoods[k][1]
-                        p_t = l * subtree_mass
-                        p_f = (1.0 - l) * subtree_mass
-                        if not hyp:
-                            p_f -= empty_mass
-                        if p_t > rv[k] * (p_t + p_f):
+                        norm = 1.0 if hyp else 1.0 - empty_mass / subtree_mass
+                        if l / norm > rv[k]:
                             hyp.add(compatible_likelihoods[k][0])
                         else:
                             subtree_mass *= 1 - l   # only relevant for negative case
