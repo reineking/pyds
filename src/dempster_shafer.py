@@ -141,6 +141,11 @@ class MassFunction(dict):
         return self._combine(mass_function, lambda s1, s2: s1 | s2, sample_count, seed, "direct")
     
     def _combine(self, mass_function, rule, sample_count, seed, sampling_method):
+        if isinstance(mass_function, list):
+            combined = self
+            for m in mass_function:
+                combined = combined._combine(m, rule, sample_count, seed, sampling_method)
+            return combined
         if not isinstance(mass_function, MassFunction):
             raise Exception("mass_function is not a MassFunction")
         if len(self) == 0 or len(mass_function) == 0:

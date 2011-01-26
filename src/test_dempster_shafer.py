@@ -68,6 +68,11 @@ class TestDempsterShafer(unittest.TestCase):
         test(self.m1 & self.m2, 10)
         test(self.m1.combine_conjunctive(self.m2, 10000, self.seed), 2)
         test(self.m1.combine_conjunctive(self.m2, 1000, self.seed, "importance"), 12)
+        # combine multiple mass functions
+        m_single = self.m1.combine_conjunctive(self.m1).combine_conjunctive(self.m2)
+        m_multi = self.m1.combine_conjunctive([self.m1, self.m2])
+        for h, v in m_single.items():
+            self.assertAlmostEqual(v, m_multi[h])
     
     def test_combine_disjunctive(self):
         def test(m, places):
@@ -81,6 +86,11 @@ class TestDempsterShafer(unittest.TestCase):
             self.assertAlmostEqual(0.3, m[('a', 'b', 'c', 'd')], places)
         test(self.m1 | self.m2, 10)
         test(self.m1.combine_disjunctive(self.m2, 10000, self.seed), 2)
+        # combine multiple mass functions
+        m_single = self.m1.combine_disjunctive(self.m1).combine_disjunctive(self.m2)
+        m_multi = self.m1.combine_disjunctive([self.m1, self.m2])
+        for h, v in m_single.items():
+            self.assertAlmostEqual(v, m_multi[h])
     
     def test_conflict(self):
         self.assertEqual(-log(0.55, 2), self.m1.conflict(self.m2));
@@ -190,8 +200,8 @@ class TestDempsterShafer(unittest.TestCase):
         pl = [('b', 0.8), ('c', 0.5)]
         correct = self.m1.combine_conjunctive(MassFunction.gbt(pl))
         self._assert_equal_belief(correct, self.m1.combine_gbt(pl), 10)
-        self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000, self.seed), 2)
-        self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, 10000, self.seed), 2)
+        self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000, self.seed), 1)
+        self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, 10000, self.seed), 1)
         
 
 if __name__ == "__main__":
