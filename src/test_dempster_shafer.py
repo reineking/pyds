@@ -176,12 +176,18 @@ class TestDempsterShafer(unittest.TestCase):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
         self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, 10000, self.seed), 2)
     
+    def test_gbt_plausibility(self):
+        pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
+        m = MassFunction.gbt(pl)
+        for h in m:
+            self.assertAlmostEqual(m.plausibility(h), MassFunction.gbt_plausibility(h, pl), 8)
+    
     def test_frame_of_discernment(self):
         self.assertEqual(frozenset(['a', 'b', 'c', 'd']), self.m1.frame_of_discernment())
         self.assertEqual(frozenset(['a', 'b', 'c']), self.m2.frame_of_discernment())
     
-    def test_combine_likelihoods(self):
-        pl = [('a', 0.3), ('b', 0.8), ('c', 0.5)]
+    def test_combine_gbt(self):
+        pl = [('b', 0.8), ('c', 0.5)]
         correct = self.m1.combine_conjunctive(MassFunction.gbt(pl))
         self._assert_equal_belief(correct, self.m1.combine_gbt(pl), 10)
         self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000, self.seed), 2)

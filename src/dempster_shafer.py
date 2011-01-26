@@ -70,6 +70,12 @@ class MassFunction(dict):
                 m[hyp] += 1.0 / sample_count
         return m
     
+    @staticmethod
+    def gbt_plausibility(hypothesis, likelihoods):
+        eta = (1 - reduce(lambda p, l: p * (1.0 - l[1]), likelihoods, 1.0))
+        likelihoods = [l for l in likelihoods if l[0] in hypothesis]
+        return (1 - reduce(lambda p, l: p * (1.0 - l[1]), likelihoods, 1.0)) / eta
+    
     def __missing__(self, key):
         return 0.0
     
