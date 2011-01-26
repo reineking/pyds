@@ -187,7 +187,7 @@ class TestDempsterShafer(unittest.TestCase):
         self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, 10000, self.seed), 2)
     
     def test_gbt_plausibility(self):
-        pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
+        pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
         m = MassFunction.gbt(pl)
         for h in m:
             self.assertAlmostEqual(m.plausibility(h), MassFunction.gbt_plausibility(h, pl), 8)
