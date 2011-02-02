@@ -5,6 +5,7 @@ Created on Nov 27, 2009
 '''
 
 from itertools import product
+import operator
 from math import log, sqrt
 from random import Random
 from numpy.random import RandomState # much faster than standard random when generating many random numbers
@@ -72,9 +73,13 @@ class MassFunction(dict):
     
     @staticmethod
     def gbt_plausibility(hypothesis, likelihoods):
-        eta = (1 - reduce(lambda p, l: p * (1.0 - l[1]), likelihoods, 1.0))
-        likelihoods = [l for l in likelihoods if l[0] in hypothesis]
-        return (1 - reduce(lambda p, l: p * (1.0 - l[1]), likelihoods, 1.0)) / eta
+        eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods])
+        return (1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis])) / eta
+    
+    @staticmethod
+    def gbt_commonality(hypothesis, likelihoods):
+        eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods])
+        return reduce(operator.mul, [l[1] for l in likelihoods if l[0] in hypothesis]) / eta
     
     def __missing__(self, key):
         return 0.0

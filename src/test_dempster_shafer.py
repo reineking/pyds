@@ -192,6 +192,12 @@ class TestDempsterShafer(unittest.TestCase):
         for h in m:
             self.assertAlmostEqual(m.plausibility(h), MassFunction.gbt_plausibility(h, pl), 8)
     
+    def test_gbt_commonality(self):
+        pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
+        m = MassFunction.gbt(pl)
+        for h in m:
+            self.assertAlmostEqual(m.commonality(h), MassFunction.gbt_commonality(h, pl), 8)
+    
     def test_frame_of_discernment(self):
         self.assertEqual(frozenset(['a', 'b', 'c', 'd']), self.m1.frame_of_discernment())
         self.assertEqual(frozenset(['a', 'b', 'c']), self.m2.frame_of_discernment())
