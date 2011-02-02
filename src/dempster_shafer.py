@@ -13,7 +13,11 @@ from numpy.random import RandomState # much faster than standard random when gen
 
 class MassFunction(dict):
     """
-        Models a Dempster-Shafer mass function using a dictionary.
+    A Dempster-Shafer mass function (basic probability assignment) based on a dictionary.
+    
+    TODO normalization
+    Hypothesis and their associated mass values can be added/changed/removed using the standard dictionary methods.
+    Each hypothesis is represented as a frozenset meaning its elements must be hashable.
     """
     
     def __init__(self, source = None):
@@ -31,8 +35,9 @@ class MassFunction(dict):
     @staticmethod
     def gbt(likelihoods, sample_count = None, seed = None):
         """
-            Constructs a mass function from a list of likelihoods (plausibilities) for a given observation using the Generalized Bayesian Theorem.
-            'likelihoods': list of singleton-plausibility tuples
+        Constructs a mass function from a list of likelihoods (plausibilities) using the Generalized Bayesian Theorem.
+        
+        'likelihoods': list of singleton-plausibility tuples
         """
         if not isinstance(likelihoods, list):
             raise TypeError("expected a list")
@@ -114,15 +119,31 @@ class MassFunction(dict):
         return dict.__delitem__(self, MassFunction._convert(hypothesis))
     
     def frame_of_discernment(self):
+        """Returns the frame of discernment (union of all contained hypotheses)."""
         return frozenset.union(*self.keys())
     
-    def belief(self, hypothesis):
+    def bel(self, hypothesis):
+        """
+        Computes the belief of 'hypothesis'.
+        
+        'hypothesis' is an iterable whose elements must be hashable.
+        """
         return self._compute(hypothesis, lambda a, b: a.issuperset(b))
     
-    def plausibility(self, hypothesis):
+    def pl(self, hypothesis):
+        """
+        Computes the plausibility of 'hypothesis'.
+        
+        'hypothesis' is an iterable whose elements must be hashable.
+        """
         return self._compute(hypothesis, lambda a, b: a & b)
     
-    def commonality(self, hypothesis):
+    def q(self, hypothesis):
+        """
+        Computes the commonality of 'hypothesis'.
+        
+        'hypothesis' is an iterable whose elements must be hashable.
+        """
         return self._compute(hypothesis, lambda a, b: b.issuperset(a))
     
     def _compute(self, hypothesis, criterion):
@@ -140,9 +161,35 @@ class MassFunction(dict):
         return self.combine_disjunctive(mass_function)
     
     def combine_conjunctive(self, mass_function, sample_count = None, seed = None, sampling_method = "direct"):
+        """
+        Conjunctively combines this mass function with another mass function.
+        
+        Arguments:
+        mass_function -- A mass function defined over the same frame of discernment.
+        sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
+        seed -- The random seed used during a Monte-Carlo combination. (Ignored of sample_count is not set.)
+        sample_method -- The type of Monte-Carlo combination. (Ignored of sample_count is not set.)
+            'direct' (default): Independently generate samples from both mass functions and intersect them. Appropriate if the evidential conflict is limited.
+            'importance': Sample the second mass function by conditioning it with the samples of the first and use importance re-sampling.
+            This method is slower but yields a better approximation of there is significant evidential conflict.
+        
+        Returns:
+        The normalized conjunctively combined mass function according to Dempster's combination rule.
+        """
         return self._combine(mass_function, lambda s1, s2: s1 & s2, sample_count, seed, sampling_method)
     
     def combine_disjunctive(self, mass_function, sample_count = None, seed = None):
+        """
+        Disjunctively combines this mass function with another mass function.
+        
+        Arguments:
+        mass_function -- A mass function defined over the same frame of discernment.
+        sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
+        seed -- The random seed used during a Monte-Carlo combination. (Ignored of sample_count is not set.)
+        
+        Returns:
+        The disjunctively combined mass function.
+        """
         return self._combine(mass_function, lambda s1, s2: s1 | s2, sample_count, seed, "direct")
     
     def _combine(self, mass_function, rule, sample_count, seed, sampling_method):
@@ -196,7 +243,20 @@ class MassFunction(dict):
     
     def combine_gbt(self, likelihoods, sample_count = None, importance_sampling = True, seed = None):
         """
-            likelihoods: list of likelihood tuples
+        Conjunctively combines this mass function with a mass function obtained from a list of likelihoods via the generalized Bayesian theorem.
+        
+        Arguments:
+        mass_function -- A mass function defined over the same frame of discernment.
+        sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
+        seed -- The random seed used during a Monte-Carlo combination. (Ignored of sample_count is not set.)
+        sample_method -- The type of Monte-Carlo combination. (Ignored of sample_count is not set.)
+            'direct' (default): Independently generate samples from both mass functions and intersect them. Appropriate if the evidential conflict is limited.
+            'importance': Sample the second mass function by conditioning it with the samples of the first and use importance re-sampling.
+            This method is slower but yields a better approximation of there is significant evidential conflict.
+        
+        TODO
+        Returns:
+        The normalized conjunctively combined mass function according to Dempster's combination rule.
         """
         combined = MassFunction()
         # restrict to generally compatible likelihoods
@@ -235,9 +295,15 @@ class MassFunction(dict):
             return combined.normalize()
     
     def condition(self, hypothesis):
+        """Conditions the mass function with hypothesis based on Dempster's rule of conditioning."""
         return self.combine_conjunctive(MassFunction([(hypothesis, 1.0)]))
     
     def conflict(self, mass_function):
+        """
+        Calculates the weight of conflict between two mass functions.
+        
+        It is defined as the logarithm of the normalization constant in Dempster's rule of combination.
+        """ 
         c = 0.0
         for h1, v1 in self.iteritems():
             for h2, v2 in mass_function.iteritems():
@@ -249,6 +315,7 @@ class MassFunction(dict):
             return -log(1.0 - c, 2)
     
     def normalize(self):
+        """Normalizes the mass function so that the sum of all mass values equals 1."""
         mass_sum = sum(self.values())
         if mass_sum != 1.0:
             for h, v in self.iteritems():
@@ -257,10 +324,11 @@ class MassFunction(dict):
     
     def markov_update(self, transition_model, sample_count = None, seed = None):
         """
-            Performs a first-order Markov update.
-            This mass function expresses the belief about the current state and the 'transition_model' describes the state transition belief.
-            The transition model is a function that takes a singleton state as input and returns possible successor states either as a MassFunction
-            or as a single randomly-sampled state set.
+        Performs a first-order Markov update.
+        
+        This mass function expresses the belief about the current state and the 'transition_model' describes the state transition belief.
+        The transition model is a function that takes a singleton state as input and returns possible successor states either as a MassFunction
+        or as a single randomly-sampled state set.
         """
         updated = MassFunction()
         if sample_count == None:
@@ -298,6 +366,7 @@ class MassFunction(dict):
         return projected
     
     def pignistify(self):
+        """Generates the pignistic transformation of this mass function."""
         p = MassFunction()
         for h, v in self.iteritems():
             for s in h:
@@ -311,9 +380,7 @@ class MassFunction(dict):
         return c
     
     def distance(self, m):
-        """
-            Evidential distance between two mass functions according to Jousselme et al. Information Fusion, 2001.
-        """
+        """Evidential distance between two mass functions according to Jousselme et al. "A new distance between two bodies of evidence". Information Fusion, 2001."""
         def sp(m1, m2, cache):
             p = 0
             for h1, v1 in m1.iteritems():
@@ -333,10 +400,11 @@ class MassFunction(dict):
     
     def prune(self, hypotheses_tree):
         """
-            Restricts the distribution to a tree-like hypothesis space.
-            Removes all hypotheses that are not part of the tree and reassigns their
-            mass values by preserving the pignistic transform and maximizing the Hartley measure.
-            'hypotheses_tree' is a list of tree nodes.
+        Restricts the distribution to a tree-like hypothesis space.
+        
+        Removes all hypotheses that are not part of the tree and reassigns their
+        mass values by preserving the pignistic transform and maximizing the Hartley measure.
+        'hypotheses_tree' is a list of tree nodes.
         """ 
         hypotheses_tree = [frozenset(h) for h in sorted(hypotheses_tree, lambda h1, h2: len(h2) - len(h1))]
         pruned = MassFunction()
@@ -352,7 +420,16 @@ class MassFunction(dict):
     
     def sample(self, n = 1, seed = None, as_dict = False):
         """
-            Generates a list of n samples from this distribution.
+        Generates a list of n samples from this distribution.
+        
+        Arguments:
+        n -- The number of samples.
+        seed -- The random seed used for drawing samples.
+        as_dict -- Return the samples as a list (False) or as a dictionary of samples and their frequencies (True). 
+        
+        Returns:
+        Either a list of hypothesis drawn (with replacement) from the distribution with probability proportional to their mass values
+        or a dictionary containing the drawn hypotheses and their frequencies.
         """
         if not isinstance(n, int):
             raise TypeError("n must be int")
