@@ -29,29 +29,29 @@ class TestDempsterShafer(unittest.TestCase):
     def test_copy(self):
         c = self.m1.copy()
         for k in self.m1.keys():
-            self.assertEqual(self.m1.belief(k), c.belief(k))
+            self.assertEqual(self.m1.bel(k), c.bel(k))
     
     def test_del(self):
         del self.m1[('a',)]
         self.assertEqual(3, len(self.m1))
         self.assertEqual(0.0, self.m1[('a',)])
     
-    def test_belief(self):
-        self.assertEqual(0.4, self.m1.belief(('a',)))
-        self.assertEqual(0.5, self.m1.belief(('a', 'd')))
-        self.assertEqual(1, self.m1.belief(('a', 'b', 'c', 'd')))
+    def test_bel(self):
+        self.assertEqual(0.4, self.m1.bel(('a',)))
+        self.assertEqual(0.5, self.m1.bel(('a', 'd')))
+        self.assertEqual(1, self.m1.bel(('a', 'b', 'c', 'd')))
     
-    def test_commonality(self):
-        self.assertEqual(0.8, self.m1.commonality(('a',)))
-        self.assertEqual(0.5, self.m1.commonality(('b',)))
-        self.assertEqual(0.4, self.m1.commonality(('a', 'd')))
-        self.assertEqual(0.3, self.m1.commonality(('a', 'b', 'c', 'd')))
+    def test_q(self):
+        self.assertEqual(0.8, self.m1.q(('a',)))
+        self.assertEqual(0.5, self.m1.q(('b',)))
+        self.assertEqual(0.4, self.m1.q(('a', 'd')))
+        self.assertEqual(0.3, self.m1.q(('a', 'b', 'c', 'd')))
     
-    def test_plausibility(self):
-        self.assertEqual(0.8, self.m1.plausibility(('a',)))
-        self.assertEqual(0.5, self.m1.plausibility(('b',)))
-        self.assertEqual(0.8, self.m1.plausibility(('a', 'd')))
-        self.assertEqual(1, self.m1.plausibility(('a', 'b', 'c', 'd')))
+    def test_pl(self):
+        self.assertEqual(0.8, self.m1.pl(('a',)))
+        self.assertEqual(0.5, self.m1.pl(('b',)))
+        self.assertEqual(0.8, self.m1.pl(('a', 'd')))
+        self.assertEqual(1, self.m1.pl(('a', 'b', 'c', 'd')))
     
     def test_condition(self):
         m = self.m1.condition(('a', 'd'))
@@ -186,17 +186,17 @@ class TestDempsterShafer(unittest.TestCase):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
         self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, 10000, self.seed), 2)
     
-    def test_gbt_plausibility(self):
+    def test_gbt_pl(self):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
         m = MassFunction.gbt(pl)
         for h in m:
-            self.assertAlmostEqual(m.plausibility(h), MassFunction.gbt_plausibility(h, pl), 8)
+            self.assertAlmostEqual(m.pl(h), MassFunction.gbt_pl(h, pl), 8)
     
-    def test_gbt_commonality(self):
+    def test_gbt_q(self):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
         m = MassFunction.gbt(pl)
         for h in m:
-            self.assertAlmostEqual(m.commonality(h), MassFunction.gbt_commonality(h, pl), 8)
+            self.assertAlmostEqual(m.q(h), MassFunction.gbt_q(h, pl), 8)
     
     def test_frame_of_discernment(self):
         self.assertEqual(frozenset(['a', 'b', 'c', 'd']), self.m1.frame_of_discernment())

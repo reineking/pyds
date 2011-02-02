@@ -57,7 +57,7 @@ class MassFunction(dict):
             traverse(m, likelihoods, ones, 0, [], 1.0)
             m.normalize()
         else:   # Monte-Carlo
-            empty_mass = reduce(lambda p, l: p * (1.0 - l[1]), likelihoods, 1.0)
+            empty_mass = reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
             rs = RandomState(seed)
             for _ in xrange(sample_count):
                 rv = rs.random_sample(len(likelihoods))
@@ -77,14 +77,14 @@ class MassFunction(dict):
         return m
     
     @staticmethod
-    def gbt_plausibility(hypothesis, likelihoods):
-        eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods])
-        return (1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis])) / eta
+    def gbt_pl(hypothesis, likelihoods):
+        eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
+        return (1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0)) / eta
     
     @staticmethod
-    def gbt_commonality(hypothesis, likelihoods):
-        eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods])
-        return reduce(operator.mul, [l[1] for l in likelihoods if l[0] in hypothesis]) / eta
+    def gbt_q(hypothesis, likelihoods):
+        eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
+        return reduce(operator.mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0) / eta
     
     def __missing__(self, key):
         return 0.0
@@ -234,7 +234,7 @@ class MassFunction(dict):
     def _combine_importance_sampling(self, mass_function, sample_count, seed):
         combined = MassFunction()
         for s1, n in self.sample(sample_count, seed, True).iteritems():
-            weight = mass_function.plausibility(s1)
+            weight = mass_function.pl(s1)
             if seed != None:
                 seed += 1
             for s2 in mass_function.condition(s1).sample(n, seed):
@@ -269,12 +269,12 @@ class MassFunction(dict):
             for s, n in self.sample(sample_count, seed, True).iteritems():
                 if importance_sampling:
                     compatible_likelihoods = [l for l in likelihoods if l[0] in s]
-                    weight = 1.0 - reduce(lambda p, l: p * (1.0 - l[1]), compatible_likelihoods, 1.0)
+                    weight = 1.0 - reduce(operator.mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
                 else:
                     compatible_likelihoods = likelihoods
                 if not compatible_likelihoods:
                     continue
-                empty_mass = reduce(lambda p, l: p * (1.0 - l[1]), compatible_likelihoods, 1.0)
+                empty_mass = reduce(operator.mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
                 for _ in xrange(n):
                     rv = random_state.random_sample(len(compatible_likelihoods))
                     subtree_mass = 1.0
