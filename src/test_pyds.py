@@ -142,6 +142,13 @@ class TestDempsterShafer(unittest.TestCase):
 #        self.assertEqual(sqrt(0.5*(0.3**2+0.7**2+1)), m3.distance(MassFunction([(('x',), 1.0)])))
 #        self.assertEqual(sqrt(0.5*(0.5**2+0.2*0.3+0.3*0.45+1)), self.m2.distance(MassFunction([(('x',), 1.0)])))
     
+    def test_distance_pnorm(self):
+        self.assertEqual(0, self.m1.distance_pnorm(self.m1))
+        self.assertEqual(0, self.m1.distance_pnorm(self.m1, p = 1))
+        m3 = MassFunction([(('e',), 1)])
+        len_m1 = sum([v**2 for v in self.m1.values()])
+        self.assertEqual((1 + len_m1)**0.5, self.m1.distance_pnorm(m3))
+
     def test_prune(self):
         m = MassFunction([(('a', 'b'), 0.8), (('b', 'c'), 0.2)])
         m = m.prune([('a',), ('a', 'b', 'c'), ('c',), ('a', 'b'), ('b',)])

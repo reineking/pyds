@@ -406,6 +406,13 @@ class MassFunction(dict):
         cache = {}
         return sqrt(0.5 * (sp(self, self, cache) + sp(m, m, cache)) - sp(self, m, cache))
     
+    def distance_pnorm(self, m, p = 2):
+        d = sum([(v - m[h])**p for h, v in self.iteritems()])
+        for h, v in m.iteritems():
+            if h not in self:
+                d += v**p
+        return d**(1.0 / p)
+    
     def prune(self, hypotheses_tree):
         """
         Restricts the distribution to a tree-like hypothesis space.
