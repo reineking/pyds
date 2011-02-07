@@ -21,12 +21,18 @@ class MassFunction(dict):
     """
     
     def __init__(self, source = None):
+        """
+        Create a new mass function.
+        
+        'source' is an iterable containing tuples of hypothesis and their mass values. 
+        """
         if source != None:
             for h, v in source:
                 self[h] += v
     
     @staticmethod
     def _convert(hypothesis):
+        """Converts a hypothesis to a frozenset."""
         if isinstance(hypothesis, frozenset):
             return hypothesis
         else:
@@ -35,7 +41,7 @@ class MassFunction(dict):
     @staticmethod
     def gbt(likelihoods, sample_count = None, seed = None):
         """
-        Constructs a mass function from a list of likelihoods (plausibilities) using the Generalized Bayesian Theorem.
+        Constructs a mass function from a list of likelihoods (plausibilities) using the generalized Bayesian theorem.
         
         'likelihoods': list of singleton-plausibility tuples
         """
@@ -76,17 +82,8 @@ class MassFunction(dict):
                 m[hyp] += 1.0 / sample_count
         return m
     
-    @staticmethod
-    def gbt_pl(hypothesis, likelihoods):
-        eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
-        return (1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0)) / eta
-    
-    @staticmethod
-    def gbt_q(hypothesis, likelihoods):
-        eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
-        return reduce(operator.mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0) / eta
-    
     def __missing__(self, key):
+        """Return 0 mass for hypotheses that are not contained."""
         return 0.0
     
     def __copy__(self):
@@ -96,6 +93,7 @@ class MassFunction(dict):
         return c
     
     def copy(self):
+        """Creates a copy of the mass function."""
         return self.__copy__()
     
     def __contains__(self, hypothesis):
@@ -105,22 +103,30 @@ class MassFunction(dict):
         return dict.__getitem__(self, MassFunction._convert(hypothesis))
     
     def __setitem__(self, hypothesis, value):
+        """
+        Adds or updates the mass value of a hypothesis.
+        
+        'hypothesis' is an iterable whose elements must be hashable.
+        Empty hypotheses and negative mass values both lead to exceptions.
+        """
         if len(hypothesis) == 0:
             raise Exception("hypothesis is empty")
         value = float(value)
         if value < 0.0:
             raise Exception("mass value is negative")
-        if value == 0 and hypothesis in self:
-            del self[hypothesis]
-        else:
-            dict.__setitem__(self, MassFunction._convert(hypothesis), value)
+#        if value == 0 and hypothesis in self:
+#            del self[hypothesis]
+        dict.__setitem__(self, MassFunction._convert(hypothesis), value)
     
     def __delitem__(self, hypothesis):
         return dict.__delitem__(self, MassFunction._convert(hypothesis))
     
     def frame_of_discernment(self):
         """Returns the frame of discernment (union of all contained hypotheses)."""
-        return frozenset.union(*self.keys())
+        if not self:
+            return frozenset()
+        else:
+            return frozenset.union(*self.keys())
     
     def bel(self, hypothesis):
         """
@@ -155,9 +161,11 @@ class MassFunction(dict):
         return c
     
     def __and__(self, mass_function):
+        """Shorthand for 'combine_conjunctive'."""
         return self.combine_conjunctive(mass_function)
     
     def __or__(self, mass_function):
+        """Shorthand for 'combine_disjunctive'."""
         return self.combine_disjunctive(mass_function)
     
     def combine_conjunctive(self, mass_function, sample_count = None, seed = None, sampling_method = "direct"):
@@ -315,7 +323,7 @@ class MassFunction(dict):
             return -log(1.0 - c, 2)
     
     def normalize(self):
-        """Normalizes the mass function so that the sum of all mass values equals 1."""
+        """Normalizes the mass function in-place so that the sum of all mass values equals 1."""
         mass_sum = sum(self.values())
         if mass_sum != 1.0:
             for h, v in self.iteritems():
@@ -418,6 +426,7 @@ class MassFunction(dict):
                         break
         return pruned
     
+    # TODO add non-stratified sampling (e.g., for n = 1)
     def sample(self, n = 1, seed = None, as_dict = False):
         """
         Generates a list of n samples from this distribution.
@@ -469,3 +478,14 @@ class MassFunction(dict):
         else:
             Random(seed).shuffle(samples)
             return samples
+
+
+def gbt_pl(hypothesis, likelihoods):
+    """Computes the plausibility of hypothesis from a list of likelihoods using the generalized Bayesian theorem."""
+    eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    return (1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0)) / eta
+    
+def gbt_q(hypothesis, likelihoods):
+    """Computes the commonality of hypothesis from a list of likelihoods using the generalized Bayesian theorem."""
+    eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    return reduce(operator.mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0) / eta

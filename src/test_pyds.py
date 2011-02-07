@@ -7,7 +7,7 @@ Created on Nov 28, 2009
 import unittest
 from math import log
 from itertools import product
-from dempster_shafer import MassFunction
+from pyds import MassFunction, gbt_pl, gbt_q
 
 
 class TestDempsterShafer(unittest.TestCase):
@@ -186,18 +186,6 @@ class TestDempsterShafer(unittest.TestCase):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
         self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, 10000, self.seed), 2)
     
-    def test_gbt_pl(self):
-        pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
-        m = MassFunction.gbt(pl)
-        for h in m:
-            self.assertAlmostEqual(m.pl(h), MassFunction.gbt_pl(h, pl), 8)
-    
-    def test_gbt_q(self):
-        pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
-        m = MassFunction.gbt(pl)
-        for h in m:
-            self.assertAlmostEqual(m.q(h), MassFunction.gbt_q(h, pl), 8)
-    
     def test_frame_of_discernment(self):
         self.assertEqual(frozenset(['a', 'b', 'c', 'd']), self.m1.frame_of_discernment())
         self.assertEqual(frozenset(['a', 'b', 'c']), self.m2.frame_of_discernment())
@@ -208,7 +196,19 @@ class TestDempsterShafer(unittest.TestCase):
         self._assert_equal_belief(correct, self.m1.combine_gbt(pl), 10)
         self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000, self.seed), 1)
         self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, 10000, self.seed), 1)
-        
+    
+    def test_gbt_pl(self):
+        pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
+        m = MassFunction.gbt(pl)
+        for h in m:
+            self.assertAlmostEqual(m.pl(h), gbt_pl(h, pl), 8)
+    
+    def test_gbt_q(self):
+        pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
+        m = MassFunction.gbt(pl)
+        for h in m:
+            self.assertAlmostEqual(m.q(h), gbt_q(h, pl), 8)
+
 
 if __name__ == "__main__":
     unittest.main()
