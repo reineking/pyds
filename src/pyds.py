@@ -231,8 +231,8 @@ class MassFunction(dict):
     
     def _combine_direct_sampling(self, mass_function, rule, sample_count, seed):
         combined = MassFunction()
-        samples1 = self.sample(sample_count, seed)
-        samples2 = mass_function.sample(sample_count, seed + 1 if seed != None else None)
+        samples1 = self.sample(sample_count, seed=seed)
+        samples2 = mass_function.sample(sample_count, seed=seed + 1 if seed != None else None)
         for i in xrange(sample_count):
             s = rule(samples1[i], samples2[i])
             if s:
@@ -241,11 +241,11 @@ class MassFunction(dict):
     
     def _combine_importance_sampling(self, mass_function, sample_count, seed):
         combined = MassFunction()
-        for s1, n in self.sample(sample_count, seed, True).iteritems():
+        for s1, n in self.sample(sample_count, seed=seed, as_dict=True).iteritems():
             weight = mass_function.pl(s1)
             if seed != None:
                 seed += 1
-            for s2 in mass_function.condition(s1).sample(n, seed):
+            for s2 in mass_function.condition(s1).sample(n, seed=seed):
                 combined[s2] += weight
         return combined.normalize()
     
@@ -274,7 +274,7 @@ class MassFunction(dict):
             return self.combine_conjunctive(MassFunction.gbt(likelihoods))
         else:   # Monte-Carlo
             random_state = RandomState(seed)
-            for s, n in self.sample(sample_count, seed, True).iteritems():
+            for s, n in self.sample(sample_count, seed=seed, as_dict=True).iteritems():
                 if importance_sampling:
                     compatible_likelihoods = [l for l in likelihoods if l[0] in s]
                     weight = 1.0 - reduce(operator.mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
@@ -352,7 +352,7 @@ class MassFunction(dict):
                     updated[kp] += v * vp
         else:
             # Monte-Carlo
-            for s, n in self.sample(sample_count, seed, True).iteritems():
+            for s, n in self.sample(sample_count, seed=seed, as_dict=True).iteritems():
                 unions = [[] for _ in xrange(n)]
                 for e in s:
                     for i, t in enumerate(transition_model(e, n)):
@@ -433,9 +433,9 @@ class MassFunction(dict):
                         break
         return pruned
     
-    # TODO add non-stratified sampling (e.g., for n = 1)
-    def sample(self, n = 1, seed = None, as_dict = False):
+    def sample(self, n, maximum_likelihood=True, seed=None, as_dict=False):
         """
+        TODO update
         Generates a list of n samples from this distribution.
         
         Arguments:
@@ -448,44 +448,50 @@ class MassFunction(dict):
         or a dictionary containing the drawn hypotheses and their frequencies.
         """
         if not isinstance(n, int):
-            raise TypeError("n must be int")
+            raise TypeError('n must be int')
         samples = dict() if as_dict else []
-        remaining_elements = dict()
         mass_sum = sum(self.values())
-        remaining_sample_count = n
-        for k, v in self.iteritems():
-            add = int(n * v / mass_sum)
-            if as_dict:
-                if add > 0:
-                    samples[k] = add
-            else:
-                samples.extend([k] * add)
-            remaining_elements[k] = v - add / n
-            remaining_sample_count -= add
-        if remaining_sample_count > 0:
-            # randomly select the remaining samples from remaining_elements
-            remaining_mass_sum = mass_sum - (n - remaining_sample_count) * mass_sum / n
-            random_values = sorted(RandomState(seed).random_sample(remaining_sample_count) * remaining_mass_sum)
-            sample_index, mass = 0, 0.0
-            for k, v in remaining_elements.iteritems():
-                mass += v
-                while (sample_index < remaining_sample_count and mass >= random_values[sample_index]):
+        if maximum_likelihood:
+            remainders = []
+            remaining_sample_count = n
+            for h, v in self.iteritems():
+                fraction = n * v / mass_sum
+                quotient = int(fraction)
+                if quotient > 0:
                     if as_dict:
-                        if k in samples:
-                            samples[k] += 1
-                        else:
-                            samples[k] = 1
+                        samples[h] = quotient
                     else:
-                        samples.append(k)
-                    sample_index += 1
-                if sample_index == remaining_sample_count:
-                    break
-        if as_dict:
-            return samples
+                        samples.extend([h] * quotient)
+                remainders.append((fraction - quotient, h))
+                remaining_sample_count -= quotient
+            remainders.sort(reverse=True)
+            for _, h in remainders[:remaining_sample_count]:
+                if as_dict:
+                    if h in samples:
+                        samples[h] += 1
+                    else:
+                        samples[h] = 1
+                else:
+                    samples.append(h)
         else:
+            random_values = RandomState(seed).random_sample(n) * mass_sum
+            hypotheses = sorted([(v, h) for h, v in self.iteritems()], reverse=True) # TODO check
+            for i in range(n):
+                mass = 0.0
+                for v, h in hypotheses:
+                    mass += v
+                    if mass >= random_values[i]:
+                        if as_dict:
+                            if h in samples:
+                                samples[h] += 1
+                            else:
+                                samples[h] = 1
+                        else:
+                            samples.append(h)
+                        break
+        if not as_dict:
             Random(seed).shuffle(samples)
-            return samples
-
+        return samples
 
 def gbt_pl(hypothesis, likelihoods):
     """Computes the plausibility of hypothesis from a list of likelihoods using the generalized Bayesian theorem."""

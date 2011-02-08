@@ -66,8 +66,8 @@ class TestDempsterShafer(unittest.TestCase):
             self.assertAlmostEqual(0.06 / (1.0 - empty), m[('c',)], places)
             self.assertAlmostEqual(0.09 / (1.0 - empty), m[('a', 'c')], places)
         test(self.m1 & self.m2, 10)
-        test(self.m1.combine_conjunctive(self.m2, 10000, self.seed), 2)
-        test(self.m1.combine_conjunctive(self.m2, 1000, self.seed, "importance"), 12)
+        test(self.m1.combine_conjunctive(self.m2, 10000, seed=self.seed), 2)
+        test(self.m1.combine_conjunctive(self.m2, 1000, seed=self.seed, sampling_method="importance"), 12)
         # combine multiple mass functions
         m_single = self.m1.combine_conjunctive(self.m1).combine_conjunctive(self.m2)
         m_multi = self.m1.combine_conjunctive([self.m1, self.m2])
@@ -159,10 +159,13 @@ class TestDempsterShafer(unittest.TestCase):
     
     def test_sample(self):
         sample_count = 1000
-        samples = self.m1.sample(sample_count, self.seed)
-        self.assertEqual(sample_count, len(samples))
+        samples_ran = self.m1.sample(sample_count, seed=self.seed, maximum_likelihood=False)
+        samples_ml = self.m1.sample(sample_count, seed=self.seed, maximum_likelihood=True)
+        self.assertEqual(sample_count, len(samples_ran))
+        self.assertEqual(sample_count, len(samples_ml))
         for k, v in self.m1.iteritems():
-            self.assertAlmostEqual(v, float(samples.count(k)) / sample_count)
+            self.assertAlmostEqual(v, float(samples_ran.count(k)) / sample_count, places=1)
+            self.assertAlmostEqual(v, float(samples_ml.count(k)) / sample_count, places=20)
         self.assertEqual(0, len(MassFunction().sample(sample_count)))
     
     def test_markov_update(self):
@@ -203,7 +206,15 @@ class TestDempsterShafer(unittest.TestCase):
         self._assert_equal_belief(correct, self.m1.combine_gbt(pl), 10)
         self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000, self.seed), 1)
         self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, 10000, self.seed), 1)
-    
+        # Bayesian special case
+        p_prior = self.m1.pignistify()
+        p_posterior = p_prior.combine_gbt(pl)
+        p_correct = MassFunction()
+        for s, l in pl:
+            p_correct[(s,)] = l * p_prior[(s,)]
+        p_correct.normalize()
+        self._assert_equal_belief(p_correct, p_posterior, 10)
+        
     def test_gbt_pl(self):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
         m = MassFunction.gbt(pl)
