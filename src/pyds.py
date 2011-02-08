@@ -168,6 +168,10 @@ class MassFunction(dict):
         """Shorthand for 'combine_disjunctive'."""
         return self.combine_disjunctive(mass_function)
     
+    def __str__(self):
+        hyp = sorted([(v, h) for (h, v) in self.iteritems()], reverse=True)
+        return '{' + ';'.join([str(tuple(h)) + ':' + str(v) for (v, h) in hyp]) + '}'
+    
     def combine_conjunctive(self, mass_function, sample_count = None, seed = None, sampling_method = "direct"):
         """
         Conjunctively combines this mass function with another mass function.
@@ -355,7 +359,8 @@ class MassFunction(dict):
             for s, n in self.sample(sample_count, seed=seed, as_dict=True).iteritems():
                 unions = [[] for _ in xrange(n)]
                 for e in s:
-                    for i, t in enumerate(transition_model(e, n)):
+                    ts = transition_model(e, n)
+                    for i, t in enumerate(ts):
                         unions[i].extend(t)
                 for u in unions:
                     updated[u] += 1.0 / sample_count
@@ -462,10 +467,10 @@ class MassFunction(dict):
                         samples[h] = quotient
                     else:
                         samples.extend([h] * quotient)
-                remainders.append((fraction - quotient, h))
+                remainders.append((h, fraction - quotient))
                 remaining_sample_count -= quotient
-            remainders.sort(reverse=True)
-            for _, h in remainders[:remaining_sample_count]:
+            remainders.sort(reverse=True, key=lambda (h, v): v)
+            for h, _ in remainders[:remaining_sample_count]:
                 if as_dict:
                     if h in samples:
                         samples[h] += 1
@@ -475,10 +480,10 @@ class MassFunction(dict):
                     samples.append(h)
         else:
             random_values = RandomState(seed).random_sample(n) * mass_sum
-            hypotheses = sorted([(v, h) for h, v in self.iteritems()], reverse=True) # TODO check
+            hypotheses = sorted(self.iteritems(), reverse=True, key=lambda (h, v): v)
             for i in range(n):
                 mass = 0.0
-                for v, h in hypotheses:
+                for h, v in hypotheses:
                     mass += v
                     if mass >= random_values[i]:
                         if as_dict:
