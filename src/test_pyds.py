@@ -214,7 +214,11 @@ class TestDempsterShafer(unittest.TestCase):
             p_correct[(s,)] = l * p_prior[(s,)]
         p_correct.normalize()
         self._assert_equal_belief(p_correct, p_posterior, 10)
-        
+    
+    def test_sample_compatible_distribution(self):
+        for p in self.m1.sample_compatible_distribution(100, self.seed):
+            self.assertTrue(self.m1.is_compatible(p))
+    
     def test_gbt_pl(self):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
         m = MassFunction.gbt(pl)

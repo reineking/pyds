@@ -503,6 +503,20 @@ class MassFunction(dict):
         if not as_dict:
             Random(seed).shuffle(samples)
         return samples
+    
+    def sample_compatible_distribution(self, n, seed=None):
+        samples = [MassFunction() for _ in range(n)]
+        rs = RandomState(seed)
+        for i in range(n):
+            for h, v in self.iteritems():
+                if len(h) == 1:
+                    samples[i][h] += v
+                else:
+                    rv = rs.random_sample(len(h))
+                    rv *= v / sum(rv)
+                    for k, s in enumerate(h):
+                        samples[i][{s}] += rv[k]
+        return samples
 
 def gbt_pl(hypothesis, likelihoods):
     """Computes the plausibility of hypothesis from a list of likelihoods using the generalized Bayesian theorem."""
