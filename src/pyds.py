@@ -438,6 +438,12 @@ class MassFunction(dict):
                         break
         return pruned
     
+    def is_compatible(self, m):
+        for h, v in m.iteritems():
+            if self.pl(h) < v:
+                return False
+        return True
+    
     def sample(self, n, maximum_likelihood=True, seed=None, as_dict=False):
         """
         TODO update
