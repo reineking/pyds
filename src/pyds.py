@@ -113,7 +113,7 @@ class MassFunction(dict):
             raise Exception("hypothesis is empty")
         value = float(value)
         if value < 0.0:
-            raise Exception("mass value is negative")
+            raise Exception("mass value is negative: %f" % value)
 #        if value == 0 and hypothesis in self:
 #            del self[hypothesis]
         dict.__setitem__(self, MassFunction._convert(hypothesis), value)
@@ -297,7 +297,7 @@ class MassFunction(dict):
                         if l / norm > rv[k]:
                             hyp.add(compatible_likelihoods[k][0])
                         else:
-                            subtree_mass *= 1 - l   # only relevant for negative case
+                            subtree_mass *= 1.0 - l   # only relevant for negative case
                     if importance_sampling:
                         combined[hyp] += weight
                     else:
