@@ -215,8 +215,14 @@ class TestDempsterShafer(unittest.TestCase):
         p_correct.normalize()
         self._assert_equal_belief(p_correct, p_posterior, 10)
     
-    def test_sample_compatible_distribution(self):
-        for p in self.m1.sample_compatible_distribution(100, self.seed):
+    def test_is_probabilistic(self):
+        self.assertFalse(self.m1.is_probabilistic())
+        self.assertTrue(self.m1.pignistify().is_probabilistic())
+        for p in self.m1.sample_probability_distributions(100, self.seed):
+            self.assertTrue(p.is_probabilistic())
+    
+    def test_sample_probability_distributions(self):
+        for p in self.m1.sample_probability_distributions(100, self.seed):
             self.assertTrue(self.m1.is_compatible(p))
     
     def test_gbt_pl(self):

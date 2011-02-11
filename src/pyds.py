@@ -504,7 +504,10 @@ class MassFunction(dict):
             Random(seed).shuffle(samples)
         return samples
     
-    def sample_compatible_distribution(self, n, seed=None):
+    def is_probabilistic(self):
+        return all([len(h) == 1 for h in self.keys()])
+    
+    def sample_probability_distributions(self, n, seed=None):
         samples = [MassFunction() for _ in range(n)]
         rs = RandomState(seed)
         for i in range(n):
