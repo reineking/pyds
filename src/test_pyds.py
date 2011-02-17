@@ -116,6 +116,9 @@ class TestDempsterShafer(unittest.TestCase):
         self.assertAlmostEqual(0.3, extended[tuple(product(('x', 'y'), ('a', 'c'), (8, 9)))])
     
     def test_project(self):
+        m = MassFunction([({('a', 'x')}, 0.3), ({('a', 'y'), ('b', 'x')}, 0.7)])
+        self._assert_equal_belief(MassFunction([({'a'}, 0.3), ({'a', 'b'}, 0.7)]), m.project([0]), 8)
+        # test extension + projection
         projected = self.m2.extend([('x', 'y'), (8, 9)], 1).project([1])
         for k, v in projected.iteritems():
             self.assertAlmostEqual(self.m2[k], v)
@@ -214,6 +217,11 @@ class TestDempsterShafer(unittest.TestCase):
             p_correct[(s,)] = l * p_prior[(s,)]
         p_correct.normalize()
         self._assert_equal_belief(p_correct, p_posterior, 10)
+    
+    def test_is_normalized(self):
+        self.assertTrue(self.m1.is_normalized())
+        self.m1['b'] = 0.15
+        self.assertFalse(self.m1.is_normalized())
     
     def test_is_probabilistic(self):
         self.assertFalse(self.m1.is_probabilistic())

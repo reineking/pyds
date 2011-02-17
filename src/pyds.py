@@ -367,15 +367,25 @@ class MassFunction(dict):
         return updated
     
     def extend(self, spaces, index):
+        """
+        Extends the mass function vacuously to an additional dimension.
+        
+        
+        """
         extended = MassFunction()
-        for k, v in self.iteritems():
-            extended[frozenset(product(*(spaces[:index] + [k] + spaces[index:])))] = v
+        for h, v in self.iteritems():
+            extended[frozenset(product(*(spaces[:index] + [h] + spaces[index:])))] = v
         return extended
     
-    def project(self, dims):
+    def project(self, dimensions):
+        """
+        Projects a mass function defined over a multi-dimensional frame of discernment to a subset of these dimensions.
+        
+        'dimensions' is a set of indices determining the dimensions to be preserved.
+        """
         projected = MassFunction()
-        for mk, v in self.iteritems():
-            projected[[t[d] for t in mk for d in dims]] += v
+        for h, v in self.iteritems():
+            projected[[s[d] for s in h for d in dimensions]] += v
         return projected
     
     def pignistify(self):
@@ -438,6 +448,14 @@ class MassFunction(dict):
                     if len(h) == 0:
                         break
         return pruned
+    
+    def is_normalized(self, epsilon=0.0):
+        """
+        Checks whether the mass function is normalized.
+        
+        It is normalized if the absolute difference between 1 and the sum of all mass values is smaller than or equal to epsilon. 
+        """
+        return abs(sum(self.values()) - 1.0) <= epsilon
     
     def is_compatible(self, m):
         """
