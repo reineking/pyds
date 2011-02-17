@@ -20,7 +20,7 @@ class MassFunction(dict):
     Each hypothesis is represented as a frozenset meaning its elements must be hashable.
     """
     
-    def __init__(self, source = None):
+    def __init__(self, source=None):
         """
         Create a new mass function.
         
@@ -39,7 +39,7 @@ class MassFunction(dict):
             return frozenset(hypothesis)
     
     @staticmethod
-    def gbt(likelihoods, sample_count = None, seed = None):
+    def gbt(likelihoods, sample_count=None, seed=None):
         """
         Constructs a mass function from a list of likelihoods (plausibilities) using the generalized Bayesian theorem.
         
@@ -172,7 +172,7 @@ class MassFunction(dict):
         hyp = sorted([(v, h) for (h, v) in self.iteritems()], reverse=True)
         return '{' + ';'.join([str(tuple(h)) + ':' + str(v) for (v, h) in hyp]) + '}'
     
-    def combine_conjunctive(self, mass_function, sample_count = None, seed = None, sampling_method = "direct"):
+    def combine_conjunctive(self, mass_function, sample_count=None, seed=None, sampling_method="direct"):
         """
         Conjunctively combines this mass function with another mass function.
         
@@ -190,7 +190,7 @@ class MassFunction(dict):
         """
         return self._combine(mass_function, lambda s1, s2: s1 & s2, sample_count, seed, sampling_method)
     
-    def combine_disjunctive(self, mass_function, sample_count = None, seed = None):
+    def combine_disjunctive(self, mass_function, sample_count=None, seed=None):
         """
         Disjunctively combines this mass function with another mass function.
         
@@ -253,7 +253,7 @@ class MassFunction(dict):
                 combined[s2] += weight
         return combined.normalize()
     
-    def combine_gbt(self, likelihoods, sample_count = None, importance_sampling = True, seed = None):
+    def combine_gbt(self, likelihoods, sample_count=None, importance_sampling=True, seed=None):
         """
         Conjunctively combines this mass function with a mass function obtained from a list of likelihoods via the generalized Bayesian theorem.
         
@@ -334,11 +334,11 @@ class MassFunction(dict):
                 self[h] = v / mass_sum
         return self
     
-    def markov_update(self, transition_model, sample_count = None, seed = None):
+    def markov_update(self, transition_model, sample_count=None, seed=None):
         """
-        Performs a first-order Markov update.
+        Performs a first-order Markov prediction step using the given transition model.
         
-        This mass function expresses the belief about the current state and the 'transition_model' describes the state transition belief.
+        This mass function expresses the belief about the current state and the transition model describes the state transition belief.
         The transition model is a function that takes a singleton state as input and returns possible successor states either as a MassFunction
         or as a single randomly-sampled state set.
         """
@@ -411,7 +411,8 @@ class MassFunction(dict):
         cache = {}
         return sqrt(0.5 * (sp(self, self, cache) + sp(m, m, cache)) - sp(self, m, cache))
     
-    def distance_pnorm(self, m, p = 2):
+    def distance_pnorm(self, m, p=2):
+        """Computes the p-norm between two mass functions."""
         d = sum([(v - m[h])**p for h, v in self.iteritems()])
         for h, v in m.iteritems():
             if h not in self:
@@ -439,10 +440,12 @@ class MassFunction(dict):
         return pruned
     
     def is_compatible(self, m):
-        for h, v in m.iteritems():
-            if self.pl(h) < v:
-                return False
-        return True
+        """
+        Checks whether another mass function is compatible with one.
+        
+        Another mass function is compatible if the mass value of each hypothesis is smaller than or equal to the corresponding plausibility given by this mass function.
+        """
+        return all([self.pl(h) >= v for (h, v) in m.iteritems()])
     
     def sample(self, n, maximum_likelihood=True, seed=None, as_dict=False):
         """
@@ -505,6 +508,11 @@ class MassFunction(dict):
         return samples
     
     def is_probabilistic(self):
+        """
+        Checks whether the mass function is a probability function.
+        
+        Returns true if and only if all hypotheses are singletons (normalization is ignored). 
+        """
         return all([len(h) == 1 for h in self.keys()])
     
     def sample_probability_distributions(self, n, seed=None):
