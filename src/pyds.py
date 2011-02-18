@@ -381,6 +381,7 @@ class MassFunction(dict):
         """
         Projects a mass function defined over a multi-dimensional frame of discernment to a subset of these dimensions.
         
+        Existing hypotheses are assumed to be sets of tuples, where each tuple is located in the multi-dimensional space.
         'dimensions' is a set of indices determining the dimensions to be preserved.
         """
         projected = MassFunction()
@@ -389,7 +390,7 @@ class MassFunction(dict):
         return projected
     
     def pignistify(self):
-        """Generates the pignistic transformation of this mass function."""
+        """Computes the pignistic transformation of the mass function."""
         p = MassFunction()
         for h, v in self.iteritems():
             for s in h:
@@ -397,6 +398,9 @@ class MassFunction(dict):
         return p
     
     def local_conflict(self):
+        """
+        Computes the local conflict measure.
+        """
         c = 0.0
         for h, v in self.iteritems():
             c += v * log(len(h) / v, 2)
