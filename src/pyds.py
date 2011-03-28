@@ -5,10 +5,10 @@ Created on Nov 27, 2009
 '''
 
 from itertools import product
+from functools import partial, reduce
 import operator
 from math import log, sqrt
-from random import Random
-from numpy.random import RandomState # much faster than standard random when generating many random numbers
+import random
 
 
 class MassFunction(dict):
@@ -39,7 +39,7 @@ class MassFunction(dict):
             return frozenset(hypothesis)
     
     @staticmethod
-    def gbt(likelihoods, sample_count=None, seed=None):
+    def gbt(likelihoods, sample_count=None):
         """
         Constructs a mass function from a list of likelihoods (plausibilities) using the generalized Bayesian theorem.
         
@@ -64,12 +64,11 @@ class MassFunction(dict):
             m.normalize()
         else:   # Monte-Carlo
             empty_mass = reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
-            rs = RandomState(seed)
-            for _ in xrange(sample_count):
-                rv = rs.random_sample(len(likelihoods))
+            for _ in range(sample_count):
+                rv = [random.random() for _ in range(len(likelihoods))]
                 subtree_mass = 1.0
                 hyp = set(ones)
-                for k in xrange(len(likelihoods)):
+                for k in range(len(likelihoods)):
                     l = likelihoods[k][1]
                     p_t = l * subtree_mass
                     p_f = (1.0 - l) * subtree_mass
@@ -88,7 +87,7 @@ class MassFunction(dict):
     
     def __copy__(self):
         c = MassFunction()
-        for k, v in self.iteritems():
+        for k, v in self.items():
             c[k] = v
         return c
     
@@ -154,11 +153,7 @@ class MassFunction(dict):
     
     def _compute(self, hypothesis, criterion):
         hypothesis = MassFunction._convert(hypothesis)
-        c = 0.0
-        for h, v in self.iteritems():
-            if criterion(hypothesis, h):
-                c += v
-        return c
+        return sum([v for h, v in self.items() if criterion(hypothesis, h)])
     
     def __and__(self, mass_function):
         """Shorthand for 'combine_conjunctive'."""
@@ -169,17 +164,16 @@ class MassFunction(dict):
         return self.combine_disjunctive(mass_function)
     
     def __str__(self):
-        hyp = sorted([(v, h) for (h, v) in self.iteritems()], reverse=True)
-        return '{' + ';'.join([str(tuple(h)) + ':' + str(v) for (v, h) in hyp]) + '}'
+        hyp = sorted([(v, h) for (h, v) in self.items()], reverse=True)
+        return "{" + ";".join([str(tuple(h)) + ":" + str(v) for (v, h) in hyp]) + "}"
     
-    def combine_conjunctive(self, mass_function, sample_count=None, seed=None, sampling_method="direct"):
+    def combine_conjunctive(self, mass_function, sample_count=None, sampling_method="direct"):
         """
         Conjunctively combines this mass function with another mass function.
         
         Arguments:
         mass_function -- A mass function defined over the same frame of discernment.
         sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
-        seed -- The random seed used during a Monte-Carlo combination. (Ignored of sample_count is not set.)
         sample_method -- The type of Monte-Carlo combination. (Ignored of sample_count is not set.)
             'direct' (default): Independently generate samples from both mass functions and intersect them. Appropriate if the evidential conflict is limited.
             'importance': Sample the second mass function by conditioning it with the samples of the first and use importance re-sampling.
@@ -188,28 +182,25 @@ class MassFunction(dict):
         Returns:
         The normalized conjunctively combined mass function according to Dempster's combination rule.
         """
-        return self._combine(mass_function, lambda s1, s2: s1 & s2, sample_count, seed, sampling_method)
+        return self._combine(mass_function, lambda s1, s2: s1 & s2, sample_count, sampling_method)
     
-    def combine_disjunctive(self, mass_function, sample_count=None, seed=None):
+    def combine_disjunctive(self, mass_function, sample_count=None):
         """
         Disjunctively combines this mass function with another mass function.
         
         Arguments:
         mass_function -- A mass function defined over the same frame of discernment.
         sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
-        seed -- The random seed used during a Monte-Carlo combination. (Ignored of sample_count is not set.)
         
         Returns:
         The disjunctively combined mass function.
         """
-        return self._combine(mass_function, lambda s1, s2: s1 | s2, sample_count, seed, "direct")
+        return self._combine(mass_function, lambda s1, s2: s1 | s2, sample_count, "direct")
     
-    def _combine(self, mass_function, rule, sample_count, seed, sampling_method):
-        if isinstance(mass_function, list):
-            combined = self
-            for m in mass_function:
-                combined = combined._combine(m, rule, sample_count, seed, sampling_method)
-            return combined
+    def _combine(self, mass_function, rule, sample_count, sampling_method):
+        if not isinstance(mass_function, MassFunction):
+            f = partial(MassFunction._combine, rule=rule, sample_count=sample_count, sampling_method=sampling_method)
+            return reduce(f, [self] + mass_function)
         if not isinstance(mass_function, MassFunction):
             raise Exception("mass_function is not a MassFunction")
         if len(self) == 0 or len(mass_function) == 0:
@@ -218,49 +209,46 @@ class MassFunction(dict):
             return self._combine_deterministic(mass_function, rule)
         else:
             if sampling_method == "direct":
-                return self._combine_direct_sampling(mass_function, rule, sample_count, seed)
+                return self._combine_direct_sampling(mass_function, rule, sample_count)
             elif sampling_method == "importance":
-                return self._combine_importance_sampling(mass_function, sample_count, seed)
+                return self._combine_importance_sampling(mass_function, sample_count)
             else:
                 raise Exception("unknown sampling method")
     
     def _combine_deterministic(self, mass_function, rule):
         combined = MassFunction()
-        for h1, v1 in self.iteritems():
-            for h2, v2 in mass_function.iteritems():
+        for h1, v1 in self.items():
+            for h2, v2 in mass_function.items():
                 h_new = rule(h1, h2)
                 if h_new:
                     combined[h_new] += v1 * v2
         return combined.normalize()
     
-    def _combine_direct_sampling(self, mass_function, rule, sample_count, seed):
+    def _combine_direct_sampling(self, mass_function, rule, sample_count):
         combined = MassFunction()
-        samples1 = self.sample(sample_count, seed=seed)
-        samples2 = mass_function.sample(sample_count, seed=seed + 1 if seed != None else None)
-        for i in xrange(sample_count):
+        samples1 = self.sample(sample_count)
+        samples2 = mass_function.sample(sample_count)
+        for i in range(sample_count):
             s = rule(samples1[i], samples2[i])
             if s:
                 combined[s] += 1.0 / sample_count
         return combined.normalize()
     
-    def _combine_importance_sampling(self, mass_function, sample_count, seed):
+    def _combine_importance_sampling(self, mass_function, sample_count):
         combined = MassFunction()
-        for s1, n in self.sample(sample_count, seed=seed, as_dict=True).iteritems():
+        for s1, n in self.sample(sample_count, as_dict=True).items():
             weight = mass_function.pl(s1)
-            if seed != None:
-                seed += 1
-            for s2 in mass_function.condition(s1).sample(n, seed=seed):
+            for s2 in mass_function.condition(s1).sample(n):
                 combined[s2] += weight
         return combined.normalize()
     
-    def combine_gbt(self, likelihoods, sample_count=None, importance_sampling=True, seed=None):
+    def combine_gbt(self, likelihoods, sample_count=None, importance_sampling=True):
         """
         Conjunctively combines this mass function with a mass function obtained from a list of likelihoods via the generalized Bayesian theorem.
         
         Arguments:
         mass_function -- A mass function defined over the same frame of discernment.
         sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
-        seed -- The random seed used during a Monte-Carlo combination. (Ignored of sample_count is not set.)
         sample_method -- The type of Monte-Carlo combination. (Ignored of sample_count is not set.)
             'direct' (default): Independently generate samples from both mass functions and intersect them. Appropriate if the evidential conflict is limited.
             'importance': Sample the second mass function by conditioning it with the samples of the first and use importance re-sampling.
@@ -277,8 +265,7 @@ class MassFunction(dict):
         if sample_count == None:    # deterministic
             return self.combine_conjunctive(MassFunction.gbt(likelihoods))
         else:   # Monte-Carlo
-            random_state = RandomState(seed)
-            for s, n in self.sample(sample_count, seed=seed, as_dict=True).iteritems():
+            for s, n in self.sample(sample_count, as_dict=True).items():
                 if importance_sampling:
                     compatible_likelihoods = [l for l in likelihoods if l[0] in s]
                     weight = 1.0 - reduce(operator.mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
@@ -287,11 +274,11 @@ class MassFunction(dict):
                 if not compatible_likelihoods:
                     continue
                 empty_mass = reduce(operator.mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
-                for _ in xrange(n):
-                    rv = random_state.random_sample(len(compatible_likelihoods))
+                for _ in range(n):
+                    rv = [random.random() for _ in range(len(compatible_likelihoods))]
                     subtree_mass = 1.0
                     hyp = set()
-                    for k in xrange(len(compatible_likelihoods)):
+                    for k in range(len(compatible_likelihoods)):
                         l = compatible_likelihoods[k][1]
                         norm = 1.0 if hyp else 1.0 - empty_mass / subtree_mass
                         if l / norm > rv[k]:
@@ -317,8 +304,8 @@ class MassFunction(dict):
         It is defined as the logarithm of the normalization constant in Dempster's rule of combination.
         """ 
         c = 0.0
-        for h1, v1 in self.iteritems():
-            for h2, v2 in mass_function.iteritems():
+        for h1, v1 in self.items():
+            for h2, v2 in mass_function.items():
                 if not h1 & h2:
                     c += v1 * v2
         if c >= 1:
@@ -330,11 +317,11 @@ class MassFunction(dict):
         """Normalizes the mass function in-place so that the sum of all mass values equals 1."""
         mass_sum = sum(self.values())
         if mass_sum != 1.0:
-            for h, v in self.iteritems():
+            for h, v in self.items():
                 self[h] = v / mass_sum
         return self
     
-    def markov_update(self, transition_model, sample_count=None, seed=None):
+    def markov_update(self, transition_model, sample_count=None):
         """
         Performs a first-order Markov prediction step using the given transition model.
         
@@ -345,19 +332,19 @@ class MassFunction(dict):
         updated = MassFunction()
         if sample_count == None:
             # deterministic
-            for k, v in self.iteritems():
+            for k, v in self.items():
                 predicted = None
                 for e in k:
                     if predicted == None:
                         predicted = transition_model(e)
                     else:
                         predicted |= transition_model(e)
-                for kp, vp in predicted.iteritems():
+                for kp, vp in predicted.items():
                     updated[kp] += v * vp
         else:
             # Monte-Carlo
-            for s, n in self.sample(sample_count, seed=seed, as_dict=True).iteritems():
-                unions = [[] for _ in xrange(n)]
+            for s, n in self.sample(sample_count, as_dict=True).items():
+                unions = [[] for _ in range(n)]
                 for e in s:
                     ts = transition_model(e, n)
                     for i, t in enumerate(ts):
@@ -373,7 +360,7 @@ class MassFunction(dict):
         
         """
         extended = MassFunction()
-        for h, v in self.iteritems():
+        for h, v in self.items():
             extended[frozenset(product(*(spaces[:index] + [h] + spaces[index:])))] = v
         return extended
     
@@ -385,14 +372,14 @@ class MassFunction(dict):
         'dimensions' is a set of indices determining the dimensions to be preserved.
         """
         projected = MassFunction()
-        for h, v in self.iteritems():
+        for h, v in self.items():
             projected[[s[d] for s in h for d in dimensions]] += v
         return projected
     
     def pignistify(self):
         """Computes the pignistic transformation of the mass function."""
         p = MassFunction()
-        for h, v in self.iteritems():
+        for h, v in self.items():
             for s in h:
                 p[(s,)] += v / len(h)
         return p
@@ -402,7 +389,7 @@ class MassFunction(dict):
         Computes the local conflict measure.
         """
         c = 0.0
-        for h, v in self.iteritems():
+        for h, v in self.items():
             c += v * log(len(h) / v, 2)
         return c
     
@@ -410,8 +397,8 @@ class MassFunction(dict):
         """Evidential distance between two mass functions according to Jousselme et al. "A new distance between two bodies of evidence". Information Fusion, 2001."""
         def sp(m1, m2, cache):
             p = 0
-            for h1, v1 in m1.iteritems():
-                for h2, v2 in m2.iteritems():
+            for h1, v1 in m1.items():
+                for h2, v2 in m2.items():
                     if (h1, h2) in cache:
                         p += cache[(h1, h2)] * v1 * v2
                     else:
@@ -427,8 +414,8 @@ class MassFunction(dict):
     
     def distance_pnorm(self, m, p=2):
         """Computes the p-norm between two mass functions."""
-        d = sum([(v - m[h])**p for h, v in self.iteritems()])
-        for h, v in m.iteritems():
+        d = sum([(v - m[h])**p for h, v in self.items()])
+        for h, v in m.items():
             if h not in self:
                 d += v**p
         return d**(1.0 / p)
@@ -441,9 +428,9 @@ class MassFunction(dict):
         mass values by preserving the pignistic transform and maximizing the Hartley measure.
         'hypotheses_tree' is a list of tree nodes.
         """ 
-        hypotheses_tree = [frozenset(h) for h in sorted(hypotheses_tree, lambda h1, h2: len(h2) - len(h1))]
+        hypotheses_tree = [frozenset(h) for h in sorted(hypotheses_tree, key=lambda h: -len(h))]
         pruned = MassFunction()
-        for h, v in self.iteritems():
+        for h, v in self.items():
             size = len(h)
             for node in hypotheses_tree:
                 if h.issuperset(node):
@@ -467,16 +454,15 @@ class MassFunction(dict):
         
         Another mass function is compatible if the mass value of each hypothesis is smaller than or equal to the corresponding plausibility given by this mass function.
         """
-        return all([self.pl(h) >= v for (h, v) in m.iteritems()])
+        return all([self.pl(h) >= v for h, v in m.items()])
     
-    def sample(self, n, maximum_likelihood=True, seed=None, as_dict=False):
+    def sample(self, n, maximum_likelihood=True, as_dict=False):
         """
         TODO update
         Generates a list of n samples from this distribution.
         
         Arguments:
         n -- The number of samples.
-        seed -- The random seed used for drawing samples.
         as_dict -- Return the samples as a list (False) or as a dictionary of samples and their frequencies (True). 
         
         Returns:
@@ -484,13 +470,13 @@ class MassFunction(dict):
         or a dictionary containing the drawn hypotheses and their frequencies.
         """
         if not isinstance(n, int):
-            raise TypeError('n must be int')
+            raise TypeError("n must be int")
         samples = dict() if as_dict else []
         mass_sum = sum(self.values())
         if maximum_likelihood:
             remainders = []
             remaining_sample_count = n
-            for h, v in self.iteritems():
+            for h, v in self.items():
                 fraction = n * v / mass_sum
                 quotient = int(fraction)
                 if quotient > 0:
@@ -500,7 +486,7 @@ class MassFunction(dict):
                         samples.extend([h] * quotient)
                 remainders.append((h, fraction - quotient))
                 remaining_sample_count -= quotient
-            remainders.sort(reverse=True, key=lambda (h, v): v)
+            remainders.sort(reverse=True, key=lambda hv: hv[1])
             for h, _ in remainders[:remaining_sample_count]:
                 if as_dict:
                     if h in samples:
@@ -510,13 +496,13 @@ class MassFunction(dict):
                 else:
                     samples.append(h)
         else:
-            random_values = RandomState(seed).random_sample(n) * mass_sum
-            hypotheses = sorted(self.iteritems(), reverse=True, key=lambda (h, v): v)
+            rv = [random.uniform(0.0, mass_sum) for _ in range(n)]
+            hypotheses = sorted(self.items(), reverse=True, key=lambda hv: hv[1])
             for i in range(n):
                 mass = 0.0
                 for h, v in hypotheses:
                     mass += v
-                    if mass >= random_values[i]:
+                    if mass >= rv[i]:
                         if as_dict:
                             if h in samples:
                                 samples[h] += 1
@@ -526,7 +512,7 @@ class MassFunction(dict):
                             samples.append(h)
                         break
         if not as_dict:
-            Random(seed).shuffle(samples)
+            random.shuffle(samples)
         return samples
     
     def is_probabilistic(self):
@@ -537,26 +523,25 @@ class MassFunction(dict):
         """
         return all([len(h) == 1 for h in self.keys()])
     
-    def sample_probability_distributions(self, n, seed=None):
+    def sample_probability_distributions(self, n):
         samples = [MassFunction() for _ in range(n)]
-        rs = RandomState(seed)
         for i in range(n):
-            for h, v in self.iteritems():
+            for h, v in self.items():
                 if len(h) == 1:
                     samples[i][h] += v
                 else:
-                    rv = rs.random_sample(len(h))
-                    rv *= v / sum(rv)
+                    rv = [random.random() for _ in range(len(h))]
+                    total = sum(rv)
                     for k, s in enumerate(h):
-                        samples[i][{s}] += rv[k]
+                        samples[i][{s}] += rv[k] * v / total
         return samples
 
 def gbt_pl(hypothesis, likelihoods):
     """Computes the plausibility of hypothesis from a list of likelihoods using the generalized Bayesian theorem."""
-    eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
-    return (1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0)) / eta
+    eta = 1.0 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    return (1.0 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0)) / eta
     
 def gbt_q(hypothesis, likelihoods):
     """Computes the commonality of hypothesis from a list of likelihoods using the generalized Bayesian theorem."""
-    eta = 1 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    eta = 1.0 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
     return reduce(operator.mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0) / eta

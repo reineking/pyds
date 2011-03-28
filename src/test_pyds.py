@@ -8,6 +8,7 @@ import unittest
 from math import log
 from itertools import product
 from pyds import MassFunction, gbt_pl, gbt_q
+import random
 
 
 class TestDempsterShafer(unittest.TestCase):
@@ -15,7 +16,7 @@ class TestDempsterShafer(unittest.TestCase):
     def setUp(self):
         self.m1 = MassFunction([(('a',), 0.4), (('b',), 0.2), (('a', 'd'), 0.1), (('a', 'b', 'c', 'd'), 0.3)])
         self.m2 = MassFunction([(('b',), 0.5), (('c',), 0.2), (('a', 'c'), 0.3)])
-        self.seed = 1
+        random.seed(0)
     
     def _assert_equal_belief(self, m1, m2, places):
         for h in m1.frame_of_discernment() | m2.frame_of_discernment():
@@ -66,8 +67,8 @@ class TestDempsterShafer(unittest.TestCase):
             self.assertAlmostEqual(0.06 / (1.0 - empty), m[('c',)], places)
             self.assertAlmostEqual(0.09 / (1.0 - empty), m[('a', 'c')], places)
         test(self.m1 & self.m2, 10)
-        test(self.m1.combine_conjunctive(self.m2, 10000, seed=self.seed), 2)
-        test(self.m1.combine_conjunctive(self.m2, 1000, seed=self.seed, sampling_method="importance"), 12)
+        test(self.m1.combine_conjunctive(self.m2, 10000), 1)
+        test(self.m1.combine_conjunctive(self.m2, 1000, sampling_method="importance"), 12)
         # combine multiple mass functions
         m_single = self.m1.combine_conjunctive(self.m1).combine_conjunctive(self.m2)
         m_multi = self.m1.combine_conjunctive([self.m1, self.m2])
@@ -85,7 +86,7 @@ class TestDempsterShafer(unittest.TestCase):
             self.assertAlmostEqual(0.05, m[('a', 'c', 'd')], places)
             self.assertAlmostEqual(0.3, m[('a', 'b', 'c', 'd')], places)
         test(self.m1 | self.m2, 10)
-        test(self.m1.combine_disjunctive(self.m2, 10000, self.seed), 2)
+        test(self.m1.combine_disjunctive(self.m2, 10000), 2)
         # combine multiple mass functions
         m_single = self.m1.combine_disjunctive(self.m1).combine_disjunctive(self.m2)
         m_multi = self.m1.combine_disjunctive([self.m1, self.m2])
@@ -120,7 +121,7 @@ class TestDempsterShafer(unittest.TestCase):
         self._assert_equal_belief(MassFunction([({'a'}, 0.3), ({'a', 'b'}, 0.7)]), m.project([0]), 8)
         # test extension + projection
         projected = self.m2.extend([('x', 'y'), (8, 9)], 1).project([1])
-        for k, v in projected.iteritems():
+        for k, v in projected.items():
             self.assertAlmostEqual(self.m2[k], v)
     
     def test_pignistify(self):
@@ -162,11 +163,11 @@ class TestDempsterShafer(unittest.TestCase):
     
     def test_sample(self):
         sample_count = 1000
-        samples_ran = self.m1.sample(sample_count, seed=self.seed, maximum_likelihood=False)
-        samples_ml = self.m1.sample(sample_count, seed=self.seed, maximum_likelihood=True)
+        samples_ran = self.m1.sample(sample_count, maximum_likelihood=False)
+        samples_ml = self.m1.sample(sample_count, maximum_likelihood=True)
         self.assertEqual(sample_count, len(samples_ran))
         self.assertEqual(sample_count, len(samples_ml))
-        for k, v in self.m1.iteritems():
+        for k, v in self.m1.items():
             self.assertAlmostEqual(v, float(samples_ran.count(k)) / sample_count, places=1)
             self.assertAlmostEqual(v, float(samples_ml.count(k)) / sample_count, places=20)
         self.assertEqual(0, len(MassFunction().sample(sample_count)))
@@ -180,13 +181,10 @@ class TestDempsterShafer(unittest.TestCase):
             self.assertAlmostEqual(0.6 * 0.2 * 0.8, m[(0, 2)], places)
             self.assertAlmostEqual(0.6 * 0.8 * 0.8, m[(-1, 0, 1, 2)], places)
         m = MassFunction([((0, 1), 0.6), ((5,), 0.4)])
-        def transition(s):
-            return MassFunction([((s - 1, s + 1), 0.8), ((s,), 0.2)])
-        def transition_sampling(s, n):
-            self.seed += 1
-            return transition(s).sample(n, self.seed)
-        test(m.markov_update(transition), 10)
-        test(m.markov_update(transition_sampling, 10000, self.seed), 2)
+        transition_model = lambda s: MassFunction([((s - 1, s + 1), 0.8), ((s,), 0.2)])
+        transition_model_mc = lambda s, n: transition_model(s).sample(n)
+        test(m.markov_update(transition_model), 10)
+        test(m.markov_update(transition_model_mc, 10000), 2)
     
     def test_gbt(self):
         def test(m, places):
@@ -195,9 +193,9 @@ class TestDempsterShafer(unittest.TestCase):
             self.assertAlmostEqual(0.7 * 0.8 / (1 - 0.7 * 0.2), m[('b',)], places)
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0)]
         test(MassFunction.gbt(pl), 10)
-        test(MassFunction.gbt(pl, 10000, self.seed), 2)
+        test(MassFunction.gbt(pl, 10000), 2)
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
-        self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, 10000, self.seed), 2)
+        self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, 10000), 2)
     
     def test_frame_of_discernment(self):
         self.assertEqual(frozenset(['a', 'b', 'c', 'd']), self.m1.frame_of_discernment())
@@ -207,8 +205,8 @@ class TestDempsterShafer(unittest.TestCase):
         pl = [('b', 0.8), ('c', 0.5)]
         correct = self.m1.combine_conjunctive(MassFunction.gbt(pl))
         self._assert_equal_belief(correct, self.m1.combine_gbt(pl), 10)
-        self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000, self.seed), 1)
-        self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, 10000, self.seed), 1)
+        self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000), 1)
+        self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, 10000), 1)
         # Bayesian special case
         p_prior = self.m1.pignistify()
         p_posterior = p_prior.combine_gbt(pl)
@@ -226,11 +224,11 @@ class TestDempsterShafer(unittest.TestCase):
     def test_is_probabilistic(self):
         self.assertFalse(self.m1.is_probabilistic())
         self.assertTrue(self.m1.pignistify().is_probabilistic())
-        for p in self.m1.sample_probability_distributions(100, self.seed):
+        for p in self.m1.sample_probability_distributions(100):
             self.assertTrue(p.is_probabilistic())
     
     def test_sample_probability_distributions(self):
-        for p in self.m1.sample_probability_distributions(100, self.seed):
+        for p in self.m1.sample_probability_distributions(100):
             self.assertTrue(self.m1.is_compatible(p))
     
     def test_gbt_pl(self):
