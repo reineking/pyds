@@ -6,9 +6,9 @@ Created on Nov 27, 2009
 
 from itertools import product
 from functools import partial, reduce
-import operator
+from operator import mul
 from math import log, sqrt
-import random
+from random import random, shuffle, uniform
 
 
 class MassFunction(dict):
@@ -63,9 +63,9 @@ class MassFunction(dict):
             traverse(m, likelihoods, ones, 0, [], 1.0)
             m.normalize()
         else:   # Monte-Carlo
-            empty_mass = reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
+            empty_mass = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
             for _ in range(sample_count):
-                rv = [random.random() for _ in range(len(likelihoods))]
+                rv = [random() for _ in range(len(likelihoods))]
                 subtree_mass = 1.0
                 hyp = set(ones)
                 for k in range(len(likelihoods)):
@@ -268,14 +268,14 @@ class MassFunction(dict):
             for s, n in self.sample(sample_count, as_dict=True).items():
                 if importance_sampling:
                     compatible_likelihoods = [l for l in likelihoods if l[0] in s]
-                    weight = 1.0 - reduce(operator.mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
+                    weight = 1.0 - reduce(mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
                 else:
                     compatible_likelihoods = likelihoods
                 if not compatible_likelihoods:
                     continue
-                empty_mass = reduce(operator.mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
+                empty_mass = reduce(mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
                 for _ in range(n):
-                    rv = [random.random() for _ in range(len(compatible_likelihoods))]
+                    rv = [random() for _ in range(len(compatible_likelihoods))]
                     subtree_mass = 1.0
                     hyp = set()
                     for k in range(len(compatible_likelihoods)):
@@ -496,7 +496,7 @@ class MassFunction(dict):
                 else:
                     samples.append(h)
         else:
-            rv = [random.uniform(0.0, mass_sum) for _ in range(n)]
+            rv = [uniform(0.0, mass_sum) for _ in range(n)]
             hypotheses = sorted(self.items(), reverse=True, key=lambda hv: hv[1])
             for i in range(n):
                 mass = 0.0
@@ -512,7 +512,7 @@ class MassFunction(dict):
                             samples.append(h)
                         break
         if not as_dict:
-            random.shuffle(samples)
+            shuffle(samples)
         return samples
     
     def is_probabilistic(self):
@@ -530,18 +530,34 @@ class MassFunction(dict):
                 if len(h) == 1:
                     samples[i][h] += v
                 else:
-                    rv = [random.random() for _ in range(len(h))]
+                    rv = [random() for _ in range(len(h))]
                     total = sum(rv)
                     for k, s in enumerate(h):
                         samples[i][{s}] += rv[k] * v / total
         return samples
 
+def gbt_m(hypothesis, likelihoods):
+    """
+    Computes m(hypothesis) using the generalized Bayesian theorem.
+    
+    TODO: doc
+    """
+    q = gbt_q(hypothesis, likelihoods)
+    return q * reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
+
+def gbt_bel(hypothesis, likelihoods):
+    """Computes bel(hypothesis) from an Iterable of likelihoods using the generalized Bayesian theorem."""
+    eta = 1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    exc = reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
+    all = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    return (exc - all) / eta
+
 def gbt_pl(hypothesis, likelihoods):
-    """Computes the plausibility of hypothesis from a list of likelihoods using the generalized Bayesian theorem."""
-    eta = 1.0 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
-    return (1.0 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0)) / eta
+    """Computes pl(hypothesis) from an Iterable of likelihoods using the generalized Bayesian theorem."""
+    eta = 1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    return (1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0)) / eta
     
 def gbt_q(hypothesis, likelihoods):
-    """Computes the commonality of hypothesis from a list of likelihoods using the generalized Bayesian theorem."""
-    eta = 1.0 - reduce(operator.mul, [1.0 - l[1] for l in likelihoods], 1.0)
-    return reduce(operator.mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0) / eta
+    """Computes the commonality of hypothesis from an Iterable of likelihoods using the generalized Bayesian theorem."""
+    eta = 1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    return reduce(mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0) / eta

@@ -7,7 +7,7 @@ Created on Nov 28, 2009
 import unittest
 from math import log
 from itertools import product
-from pyds import MassFunction, gbt_pl, gbt_q
+from pyds import MassFunction, gbt_m, gbt_bel, gbt_pl, gbt_q
 import random
 
 
@@ -230,6 +230,18 @@ class TestDempsterShafer(unittest.TestCase):
     def test_sample_probability_distributions(self):
         for p in self.m1.sample_probability_distributions(100):
             self.assertTrue(self.m1.is_compatible(p))
+    
+    def test_gbt_m(self):
+        likelihoods = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
+        m = MassFunction.gbt(likelihoods)
+        for h, v in m.items():
+            self.assertAlmostEqual(v, gbt_m(h, likelihoods), 8)
+    
+    def test_gbt_bel(self):
+        likelihoods = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
+        m = MassFunction.gbt(likelihoods)
+        for h in m:
+            self.assertAlmostEqual(m.bel(h), gbt_bel(h, likelihoods), 8)
     
     def test_gbt_pl(self):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
