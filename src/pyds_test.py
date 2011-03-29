@@ -71,7 +71,7 @@ class PyDSTest(unittest.TestCase):
             self.assertAlmostEqual(0.09 / (1.0 - empty), m[('a', 'c')], places)
         test(self.m1 & self.m2, 10)
         test(self.m1.combine_conjunctive(self.m2, 10000), 1)
-        test(self.m1.combine_conjunctive(self.m2, 1000, sampling_method="importance"), 12)
+        test(self.m1.combine_conjunctive(self.m2, 1000, importance_sampling=True), 12)
         # combine multiple mass functions
         m_single = self.m1.combine_conjunctive(self.m1).combine_conjunctive(self.m2)
         m_multi = self.m1.combine_conjunctive([self.m1, self.m2])
@@ -127,8 +127,8 @@ class PyDSTest(unittest.TestCase):
         for k, v in projected.items():
             self.assertAlmostEqual(self.m2[k], v)
     
-    def test_pignistify(self):
-        p = self.m1.pignistify()
+    def test_pignistic(self):
+        p = self.m1.pignistic()
         self.assertEqual(0.525, p[('a',)])
         self.assertEqual(0.275, p[('b',)])
         self.assertEqual(0.075, p[('c',)])
@@ -139,7 +139,7 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(c, self.m2.local_conflict())
         # pignistic entropy
         h = -0.125 * log(0.125, 2) - 0.075 * log(0.075, 2) - 0.275 * log(0.275, 2) - 0.525 * log(0.525, 2)
-        self.assertAlmostEqual(h, self.m1.pignistify().local_conflict())
+        self.assertAlmostEqual(h, self.m1.pignistic().local_conflict())
     
     def test_distance(self):
         m3 = MassFunction([(('b',), 0.7), (('c',), 0.3)])
@@ -211,7 +211,7 @@ class PyDSTest(unittest.TestCase):
         self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000), 1)
         self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, 10000), 1)
         # Bayesian special case
-        p_prior = self.m1.pignistify()
+        p_prior = self.m1.pignistic()
         p_posterior = p_prior.combine_gbt(pl)
         p_correct = MassFunction()
         for s, l in pl:
@@ -226,7 +226,7 @@ class PyDSTest(unittest.TestCase):
     
     def test_is_probabilistic(self):
         self.assertFalse(self.m1.is_probabilistic())
-        self.assertTrue(self.m1.pignistify().is_probabilistic())
+        self.assertTrue(self.m1.pignistic().is_probabilistic())
         for p in self.m1.sample_probability_distributions(100):
             self.assertTrue(p.is_probabilistic())
     

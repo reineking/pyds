@@ -1,8 +1,24 @@
-'''
-Created on Nov 27, 2009
+# Copyright (C) 2010-2011  Thomas Reineking
+#
+# This file is part of the PyDS library.
+# 
+# PyDS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# PyDS is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-@author: reineking
-'''
+
+"""
+Tools for performing computations in the Dempster-Shafer framework.
+"""
 
 from itertools import product
 from functools import partial, reduce
@@ -13,26 +29,30 @@ from random import random, shuffle, uniform
 
 class MassFunction(dict):
     """
-    A Dempster-Shafer mass function (basic probability assignment) based on a dictionary.
+    A Dempster-Shafer mass function (basic belief assignment) based on a dictionary.
     
-    TODO normalization
-    Hypothesis and their associated mass values can be added/changed/removed using the standard dictionary methods.
-    Each hypothesis is represented as a frozenset meaning its elements must be hashable.
+    Both normalized and unnormalized mass functions are supported.
+    Hypotheses and their associated mass values can be added/changed/removed using the standard dictionary methods.
+    Each hypothesis can be an arbitrary sequence which is automatically converted to a 'frozenset', meaning its elements must be hashable.
     """
     
     def __init__(self, source=None):
         """
-        Create a new mass function.
+        Creates a new mass function.
         
-        'source' is an iterable containing tuples of hypothesis and their mass values. 
+        If 'source' is not None, it is used to initialize the mass function.
+        It can either be a dictionary mapping hypotheses to non-negative mass values
+        or an iterable containing tuples consisting of a hypothesis and a corresponding mass value.
         """
         if source != None:
+            if isinstance(source, dict):
+                source = source.items()
             for h, v in source:
                 self[h] += v
     
     @staticmethod
     def _convert(hypothesis):
-        """Converts hypothesis to a frozenset in order to make it hashable."""
+        """Convert hypothesis to a 'frozenset' in order to make it hashable."""
         if isinstance(hypothesis, frozenset):
             return hypothesis
         else:
@@ -41,12 +61,20 @@ class MassFunction(dict):
     @staticmethod
     def gbt(likelihoods, normalization=True, sample_count=None):
         """
-        Constructs a mass function from a list of likelihoods (plausibilities) using the generalized Bayesian theorem.
+        Constructs a mass function using the generalized Bayesian theorem.
+        For more information, see Ph. Smets, 1993. Belief functions: 
+        The disjunctive rule of combination and the generalized Bayesian theorem. International Journal of Approximate Reasoning. 
         
-        'likelihoods': list of singleton-plausibility tuples
+        'likelihoods' specifies the conditional plausibilities for a set of singleton hypotheses.
+        It can either be a dictionary mapping singleton hypotheses to plausibilities or an iterable
+        containing tuples consisting of a singleton hypothesis and a corresponding plausibility value.
+        
+        'normalization' determines whether the resulting mass function is normalized, i.e., whether m({}) == 0.
+        
+        If 'sample_count' is not None, the true mass function is approximated using the specified number of samples.
         """
         m = MassFunction()
-        # filter trivial likelihoods (0, 1)
+        # filter trivial likelihoods 0 and 1
         ones = [h for (h, l) in likelihoods if l >= 1.0]
         likelihoods = [(h, l) for (h, l) in likelihoods if 0.0 < l < 1.0]
         if sample_count == None:   # deterministic
@@ -71,12 +99,12 @@ class MassFunction(dict):
                     l = likelihoods[k][1]
                     p_t = l * subtree_mass
                     p_f = (1.0 - l) * subtree_mass
-                    if not hyp:
+                    if normalization and not hyp: # avoid empty hypotheses in the normalized case
                         p_f -= empty_mass
                     if p_t > rv[k] * (p_t + p_f):
                         hyp.add(likelihoods[k][0])
                     else:
-                        subtree_mass *= 1 - l # only relevant for negative case
+                        subtree_mass *= 1 - l # only relevant for the normalized empty case
                 m[hyp] += 1.0 / sample_count
         return m
     
@@ -91,7 +119,7 @@ class MassFunction(dict):
         return c
     
     def copy(self):
-        """Creates a shallow copy of the object."""
+        """Creates a shallow copy of the mass function."""
         return self.__copy__()
     
     def __contains__(self, hypothesis):
@@ -104,23 +132,23 @@ class MassFunction(dict):
         """
         Adds or updates the mass value of a hypothesis.
         
-        'hypothesis' is an iterable whose elements must be hashable.
-        Empty hypotheses and negative mass values both lead to exceptions.
+        'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
+        In case of a negative mass value, a ValueError is raised.
         """
-        if len(hypothesis) == 0:
-            raise Exception("hypothesis is empty")
-        value = float(value)
         if value < 0.0:
-            raise Exception("mass value is negative: %f" % value)
-#        if value == 0 and hypothesis in self:
-#            del self[hypothesis]
+            raise ValueError("mass value is negative: %f" % value)
         dict.__setitem__(self, MassFunction._convert(hypothesis), value)
     
     def __delitem__(self, hypothesis):
         return dict.__delitem__(self, MassFunction._convert(hypothesis))
     
     def frame_of_discernment(self):
-        """Returns the frame of discernment (union of all contained hypotheses)."""
+        """
+        Returns the frame of discernment as a 'frozenset'.
+        
+        The frame of discernment is the union of all contained hypotheses.
+        In case the mass function does not contain any hypotheses, an empty set is returned.
+        """
         if not self:
             return frozenset()
         else:
@@ -130,29 +158,34 @@ class MassFunction(dict):
         """
         Computes the belief of 'hypothesis'.
         
-        'hypothesis' is an iterable whose elements must be hashable.
+        'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
         """
-        return self._compute(hypothesis, lambda a, b: a.issuperset(b))
+        hypothesis = MassFunction._convert(hypothesis)
+        if not hypothesis:
+            return 0.0
+        else:
+            return sum([v for h, v in self.items() if hypothesis.issuperset(h)])
     
     def pl(self, hypothesis):
         """
         Computes the plausibility of 'hypothesis'.
         
-        'hypothesis' is an iterable whose elements must be hashable.
+        'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
         """
-        return self._compute(hypothesis, lambda a, b: a & b)
+        hypothesis = MassFunction._convert(hypothesis)
+        if not hypothesis:
+            return 0.0
+        else:
+            return sum([v for h, v in self.items() if hypothesis & h])
     
     def q(self, hypothesis):
         """
         Computes the commonality of 'hypothesis'.
         
-        'hypothesis' is an iterable whose elements must be hashable.
+        'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
         """
-        return self._compute(hypothesis, lambda a, b: b.issuperset(a))
-    
-    def _compute(self, hypothesis, criterion):
         hypothesis = MassFunction._convert(hypothesis)
-        return sum([v for h, v in self.items() if criterion(hypothesis, h)])
+        return sum([v for h, v in self.items() if h.issuperset(hypothesis)])
     
     def __and__(self, mass_function):
         """Shorthand for 'combine_conjunctive'."""
@@ -166,64 +199,69 @@ class MassFunction(dict):
         hyp = sorted([(v, h) for (h, v) in self.items()], reverse=True)
         return "{" + ";".join([str(tuple(h)) + ":" + str(v) for (v, h) in hyp]) + "}"
     
-    def combine_conjunctive(self, mass_function, sample_count=None, sampling_method="direct"):
+    def combine_conjunctive(self, mass_function, normalization=True, sample_count=None, importance_sampling=False):
         """
-        Conjunctively combines this mass function with another mass function.
+        Conjunctively combines the mass function with another mass function and returns the combination as a new mass function.
         
-        Arguments:
-        mass_function -- A mass function defined over the same frame of discernment.
-        sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
-        sample_method -- The type of Monte-Carlo combination. (Ignored of sample_count is not set.)
-            'direct' (default): Independently generate samples from both mass functions and intersect them. Appropriate if the evidential conflict is limited.
-            'importance': Sample the second mass function by conditioning it with the samples of the first and use importance re-sampling.
-            This method is slower but yields a better approximation of there is significant evidential conflict.
+        The other mass function is assumed to be defined over the same frame of discernment.
+        If 'mass_function' is not of type MassFunction, it is assumed to be an iterable containing multiple mass functions that are iteratively combined.
         
-        Returns:
-        The normalized conjunctively combined mass function according to Dempster's combination rule.
+        If the mass functions are flatly contracting or if one of the mass functions is empty, an empty mass function is returned.
+        
+        'normalization' determines whether the resulting mass function is normalized (default is True).
+         
+        If 'sample_count' is not None, the true combination is approximated using the specified number of samples.
+        In this case, 'importance_sampling' determines the method of approximation (only if normalization=True, otherwise 'importance_sampling' is ignored).
+        The default method (importance_sampling=False) independently generates samples from both mass functions and computes their intersections.
+        If importance_sampling=True, importance sampling is used to avoid empty intersections, which leads to a lower approximation error but is also slower.
+        This method should be used if there is significant evidential conflict between the mass functions.
         """
-        return self._combine(mass_function, lambda s1, s2: s1 & s2, sample_count, sampling_method)
+        return self._combine(mass_function, lambda s1, s2: s1 & s2, normalization, sample_count, importance_sampling)
     
     def combine_disjunctive(self, mass_function, sample_count=None):
         """
-        Disjunctively combines this mass function with another mass function.
+        Disjunctively combines the mass function with another mass function and returns the combination as a new mass function.
         
-        Arguments:
-        mass_function -- A mass function defined over the same frame of discernment.
-        sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
+        The other mass function is assumed to be defined over the same frame of discernment.
+        If 'mass_function' is not of type MassFunction, it is assumed to be an iterable containing multiple mass functions that are iteratively combined.
         
-        Returns:
-        The disjunctively combined mass function.
+        If 'sample_count' is not None, the true combination is approximated using the specified number of samples.
         """
-        return self._combine(mass_function, lambda s1, s2: s1 | s2, sample_count, "direct")
+        return self._combine(mass_function, lambda s1, s2: s1 | s2, False, sample_count, False)
     
-    def _combine(self, mass_function, rule, sample_count, sampling_method):
+    def _combine(self, mass_function, rule, normalization, sample_count, importance_sampling):
+        """Helper method for combining two or more mass functions."""
         if not isinstance(mass_function, MassFunction):
-            f = partial(MassFunction._combine, rule=rule, sample_count=sample_count, sampling_method=sampling_method)
+            f = partial(MassFunction._combine, rule=rule, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling)
             return reduce(f, [self] + mass_function)
         if not isinstance(mass_function, MassFunction):
-            raise Exception("mass_function is not a MassFunction")
-        if len(self) == 0 or len(mass_function) == 0:
+            raise TypeError("expected type MassFunction")
+        if not self or not mass_function:
             return MassFunction()
         if sample_count == None:
-            return self._combine_deterministic(mass_function, rule)
+            m = self._combine_deterministic(mass_function, rule)
         else:
-            if sampling_method == "direct":
-                return self._combine_direct_sampling(mass_function, rule, sample_count)
-            elif sampling_method == "importance":
-                return self._combine_importance_sampling(mass_function, sample_count)
+            if importance_sampling:
+                m = self._combine_importance_sampling(mass_function, sample_count)
             else:
-                raise Exception("unknown sampling method")
+                m = self._combine_direct_sampling(mass_function, rule, sample_count)
+        if normalization:
+            return m.normalize()
+        else:
+            return m
     
     def _combine_deterministic(self, mass_function, rule):
+        """Helper method for deterministically combining two mass functions."""
         combined = MassFunction()
         for h1, v1 in self.items():
             for h2, v2 in mass_function.items():
                 h_new = rule(h1, h2)
                 if h_new:
                     combined[h_new] += v1 * v2
-        return combined.normalize()
+        return combined
     
     def _combine_direct_sampling(self, mass_function, rule, sample_count):
+        """Helper method for approximatively combining two mass functions using direct sampling."""
         combined = MassFunction()
         samples1 = self.sample(sample_count)
         samples2 = mass_function.sample(sample_count)
@@ -231,15 +269,16 @@ class MassFunction(dict):
             s = rule(samples1[i], samples2[i])
             if s:
                 combined[s] += 1.0 / sample_count
-        return combined.normalize()
+        return combined
     
     def _combine_importance_sampling(self, mass_function, sample_count):
+        """Helper method for approximatively combining two mass functions using importance sampling."""
         combined = MassFunction()
         for s1, n in self.sample(sample_count, as_dict=True).items():
             weight = mass_function.pl(s1)
             for s2 in mass_function.condition(s1).sample(n):
                 combined[s2] += weight
-        return combined.normalize()
+        return combined
     
     def combine_gbt(self, likelihoods, sample_count=None, importance_sampling=True):
         """
@@ -292,9 +331,15 @@ class MassFunction(dict):
                             combined[hyp] += 1.0
             return combined.normalize()
     
-    def condition(self, hypothesis):
-        """Conditions the mass function with hypothesis based on Dempster's rule of conditioning."""
-        return self.combine_conjunctive(MassFunction([(hypothesis, 1.0)]))
+    def condition(self, hypothesis, normalization=True):
+        """
+        Conditions the mass function with 'hypothesis' according to Dempster's rule of conditioning.
+        
+        'normalization' determines whether the resulting conjunctive combination is normalized.
+        
+        Shorthand for self.combine_conjunctive(MassFunction({hypothesis:1.0}), normalization).
+        """
+        return self.combine_conjunctive(MassFunction({hypothesis:1.0}), normalization)
     
     def conflict(self, mass_function):
         """
@@ -313,7 +358,12 @@ class MassFunction(dict):
             return -log(1.0 - c, 2)
     
     def normalize(self):
-        """Normalizes the mass function in-place so that the sum of all mass values equals 1."""
+        """
+        Normalizes the mass function in-place such that the sum of all mass values equals 1.
+        
+        It does not set the mass value corresponding to the empty set to 0 and only asserts that the mass values sum to 1.
+        For convenience, the method returns 'self'.
+        """
         mass_sum = sum(self.values())
         if mass_sum != 1.0:
             for h, v in self.items():
@@ -375,7 +425,7 @@ class MassFunction(dict):
             projected[[s[d] for s in h for d in dimensions]] += v
         return projected
     
-    def pignistify(self):
+    def pignistic(self):
         """Computes the pignistic transformation of the mass function."""
         p = MassFunction()
         for h, v in self.items():
@@ -411,8 +461,12 @@ class MassFunction(dict):
         cache = {}
         return sqrt(0.5 * (sp(self, self, cache) + sp(m, m, cache)) - sp(self, m, cache))
     
-    def distance_pnorm(self, m, p=2):
-        """Computes the p-norm between two mass functions."""
+    def norm(self, m, p=2):
+        """
+        Computes the p-norm between two mass functions.
+        
+        TODO:
+        """
         d = sum([(v - m[h])**p for h, v in self.items()])
         for h, v in m.items():
             if h not in self:
@@ -443,15 +497,18 @@ class MassFunction(dict):
         """
         Checks whether the mass function is normalized.
         
+        TODO: only checks mass values, not emptyset
+        
         It is normalized if the absolute difference between 1 and the sum of all mass values is smaller than or equal to epsilon. 
         """
         return abs(sum(self.values()) - 1.0) <= epsilon
     
     def is_compatible(self, m):
         """
-        Checks whether another mass function is compatible with one.
+        Checks whether another mass function is compatible with this one.
         
-        Another mass function is compatible if the mass value of each hypothesis is smaller than or equal to the corresponding plausibility given by this mass function.
+        Compatibility means that the mass value of each hypothesis in 'm' is less than
+        or equal to the corresponding plausibility given by this mass function.
         """
         return all([self.pl(h) >= v for h, v in m.items()])
     
@@ -538,29 +595,42 @@ class MassFunction(dict):
 
 def gbt_m(hypothesis, likelihoods, normalization=True):
     """
-    Computes m(hypothesis) using the generalized Bayesian theorem.
+    Computes the mass value of 'hypothesis' using the generalized Bayesian theorem.
     
-    TODO: doc
+    Equivalent to MassFunction.gbt(likelihoods, normalization)[hypothesis].
     """
     q = gbt_q(hypothesis, likelihoods, normalization)
     return q * reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
 
 def gbt_bel(hypothesis, likelihoods, normalization=True):
-    """Computes bel(hypothesis) from an Iterable of likelihoods using the generalized Bayesian theorem."""
+    """
+    Computes the belief of 'hypothesis' using the generalized Bayesian theorem.
+    
+    Equivalent to MassFunction.gbt(likelihoods, normalization).bel(hypothesis).
+    """
     eta = _gbt_normalization(likelihoods) if normalization else 1.0
     exc = reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
     all = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
     return eta * (exc - all)
 
 def gbt_pl(hypothesis, likelihoods, normalization=True):
-    """Computes pl(hypothesis) from an Iterable of likelihoods using the generalized Bayesian theorem."""
+    """
+    Computes the plausibility of 'hypothesis' using the generalized Bayesian theorem.
+    
+    Equivalent to MassFunction.gbt(likelihoods, normalization).pl(hypothesis).
+    """
     eta = _gbt_normalization(likelihoods) if normalization else 1.0
     return eta * (1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0))
     
 def gbt_q(hypothesis, likelihoods, normalization=True):
-    """Computes the commonality of hypothesis from an Iterable of likelihoods using the generalized Bayesian theorem."""
+    """
+    Computes the commonality of 'hypothesis' using the generalized Bayesian theorem.
+    
+    Equivalent to MassFunction.gbt(likelihoods, normalization).q(hypothesis).
+    """
     eta = _gbt_normalization(likelihoods) if normalization else 1.0
     return eta * reduce(mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0)
 
 def _gbt_normalization(likelihoods):
+    """Helper function for computing the GBT normalization constant."""
     return 1.0 / (1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0))
