@@ -11,7 +11,7 @@ from pyds import MassFunction, gbt_m, gbt_bel, gbt_pl, gbt_q
 import random
 
 
-class TestDempsterShafer(unittest.TestCase):
+class PyDSTest(unittest.TestCase):
 
     def setUp(self):
         self.m1 = MassFunction([(('a',), 0.4), (('b',), 0.2), (('a', 'd'), 0.1), (('a', 'b', 'c', 'd'), 0.3)])
@@ -31,6 +31,9 @@ class TestDempsterShafer(unittest.TestCase):
         c = self.m1.copy()
         for k in self.m1.keys():
             self.assertEqual(self.m1.bel(k), c.bel(k))
+        c[{'a'}] = 0.3
+        # assert that the original objects remains unchanged
+        self.assertEqual(0.4, self.m1[{'a'}])
     
     def test_del(self):
         del self.m1[('a',)]

@@ -32,21 +32,19 @@ class MassFunction(dict):
     
     @staticmethod
     def _convert(hypothesis):
-        """Converts a hypothesis to a frozenset."""
+        """Converts hypothesis to a frozenset in order to make it hashable."""
         if isinstance(hypothesis, frozenset):
             return hypothesis
         else:
             return frozenset(hypothesis)
     
     @staticmethod
-    def gbt(likelihoods, sample_count=None):
+    def gbt(likelihoods, normalization=True, sample_count=None):
         """
         Constructs a mass function from a list of likelihoods (plausibilities) using the generalized Bayesian theorem.
         
         'likelihoods': list of singleton-plausibility tuples
         """
-        if not isinstance(likelihoods, list):
-            raise TypeError("expected a list")
         m = MassFunction()
         # filter trivial likelihoods (0, 1)
         ones = [h for (h, l) in likelihoods if l >= 1.0]
@@ -55,13 +53,14 @@ class MassFunction(dict):
             def traverse(m, likelihoods, ones, index, hyp, mass):
                 if index == len(likelihoods):
                     hyp += ones
-                    if len(hyp) > 0:
+                    if not normalization or len(hyp) > 0:
                         m[hyp] = mass
                 else:
                     traverse(m, likelihoods, ones, index + 1, hyp + [likelihoods[index][0]], mass * likelihoods[index][1])
                     traverse(m, likelihoods, ones, index + 1, hyp, mass * (1.0 - likelihoods[index][1]))
             traverse(m, likelihoods, ones, 0, [], 1.0)
-            m.normalize()
+            if normalization:
+                m.normalize()
         else:   # Monte-Carlo
             empty_mass = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
             for _ in range(sample_count):
@@ -92,7 +91,7 @@ class MassFunction(dict):
         return c
     
     def copy(self):
-        """Creates a copy of the mass function."""
+        """Creates a shallow copy of the object."""
         return self.__copy__()
     
     def __contains__(self, hypothesis):
@@ -536,28 +535,32 @@ class MassFunction(dict):
                         samples[i][{s}] += rv[k] * v / total
         return samples
 
-def gbt_m(hypothesis, likelihoods):
+
+def gbt_m(hypothesis, likelihoods, normalization=True):
     """
     Computes m(hypothesis) using the generalized Bayesian theorem.
     
     TODO: doc
     """
-    q = gbt_q(hypothesis, likelihoods)
+    q = gbt_q(hypothesis, likelihoods, normalization)
     return q * reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
 
-def gbt_bel(hypothesis, likelihoods):
+def gbt_bel(hypothesis, likelihoods, normalization=True):
     """Computes bel(hypothesis) from an Iterable of likelihoods using the generalized Bayesian theorem."""
-    eta = 1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    eta = _gbt_normalization(likelihoods) if normalization else 1.0
     exc = reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
     all = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
-    return (exc - all) / eta
+    return eta * (exc - all)
 
-def gbt_pl(hypothesis, likelihoods):
+def gbt_pl(hypothesis, likelihoods, normalization=True):
     """Computes pl(hypothesis) from an Iterable of likelihoods using the generalized Bayesian theorem."""
-    eta = 1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
-    return (1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0)) / eta
+    eta = _gbt_normalization(likelihoods) if normalization else 1.0
+    return eta * (1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0))
     
-def gbt_q(hypothesis, likelihoods):
+def gbt_q(hypothesis, likelihoods, normalization=True):
     """Computes the commonality of hypothesis from an Iterable of likelihoods using the generalized Bayesian theorem."""
-    eta = 1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
-    return reduce(mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0) / eta
+    eta = _gbt_normalization(likelihoods) if normalization else 1.0
+    return eta * reduce(mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0)
+
+def _gbt_normalization(likelihoods):
+    return 1.0 / (1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0))
