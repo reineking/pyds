@@ -20,7 +20,7 @@
 A framework for performing computations in the Dempster-Shafer theory.
 """
 
-from itertools import product
+from itertools import chain, combinations, product
 from functools import partial, reduce
 from operator import mul
 from math import log, sqrt
@@ -110,6 +110,18 @@ class MassFunction(dict):
                 m[hyp] += 1.0 / sample_count
         return m
     
+    @staticmethod
+    def from_bel(bel):
+        pass
+    
+    @staticmethod
+    def from_pl(bel):
+        pass
+    
+    @staticmethod
+    def from_q(bel):
+        pass
+    
     def __missing__(self, key):
         """Return 0 mass for hypotheses that are not contained."""
         return 0.0
@@ -187,59 +199,53 @@ class MassFunction(dict):
         """
         pass
     
-    def bel(self, hypothesis):
+    def bel(self, hypothesis=None):
         """
-        Computes the belief of 'hypothesis'.
+        Computes either the belief of 'hypothesis' or the entire belief function (hypothesis=None).
         
-        'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
+        If 'hypothesis' is None (default), a dictionary mapping hypotheses to their respective belief values is returned.
+        Otherwise, the belief of 'hypothesis' is returned.
+        In this case, 'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
         """
-        hypothesis = MassFunction._convert(hypothesis)
-        if not hypothesis:
-            return 0.0
+        if hypothesis is None: # compute bel
+            return {h:self.bel(h) for h in powerset(self.core())}
+        else: # compute bel(hypothesis)
+            hypothesis = MassFunction._convert(hypothesis)
+            if not hypothesis:
+                return 0.0
+            else:
+                return sum([v for h, v in self.items() if hypothesis.issuperset(h)])
+    
+    def pl(self, hypothesis=None):
+        """
+        Computes either the plausibility of 'hypothesis' or the entire plausibility function (hypothesis=None).
+        
+        If 'hypothesis' is None (default), a dictionary mapping hypotheses to their respective plausibility values is returned.
+        Otherwise, the plausibility of 'hypothesis' is returned.
+        In this case, 'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
+        """
+        if hypothesis is None:
+            return {h:self.pl(h) for h in powerset(self.core())}
         else:
-            return sum([v for h, v in self.items() if hypothesis.issuperset(h)])
+            hypothesis = MassFunction._convert(hypothesis)
+            if not hypothesis:
+                return 0.0
+            else:
+                return sum([v for h, v in self.items() if hypothesis & h])
     
-    def pl(self, hypothesis):
+    def q(self, hypothesis=None):
         """
-        Computes the plausibility of 'hypothesis'.
+        Computes either the commonality of 'hypothesis' or the entire commonality function (hypothesis=None).
         
-        'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
+        If 'hypothesis' is None (default), a dictionary mapping hypotheses to their respective commonality values is returned.
+        Otherwise, the commonality of 'hypothesis' is returned.
+        In this case, 'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
         """
-        hypothesis = MassFunction._convert(hypothesis)
-        if not hypothesis:
-            return 0.0
+        if hypothesis is None:
+            return {h:self.q(h) for h in powerset(self.core())}
         else:
-            return sum([v for h, v in self.items() if hypothesis & h])
-    
-    def q(self, hypothesis):
-        """
-        Computes the commonality of 'hypothesis'.
-        
-        'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
-        """
-        hypothesis = MassFunction._convert(hypothesis)
-        return sum([v for h, v in self.items() if h.issuperset(hypothesis)])
-    
-    def belief_function(self):
-        """
-        TODO:
-        """
-        bel = None
-        return bel
-    
-    def plausibility_function(self):
-        """
-        TODO:
-        """
-        bel = None
-        return bel
-    
-    def commonality_function(self):
-        """
-        TODO:
-        """
-        bel = None
-        return bel
+            hypothesis = MassFunction._convert(hypothesis)
+            return sum([v for h, v in self.items() if h.issuperset(hypothesis)])
     
     def __and__(self, mass_function):
         """Shorthand for 'combine_conjunctive(mass_function)'."""
@@ -641,6 +647,17 @@ class MassFunction(dict):
                         samples[i][{s}] += rv[k] * v / total
         return samples
 
+
+def powerset(set, include_empty=True):
+    """
+    Returns an iterator over the power set of 'set'.
+    
+    'set' is an arbitrary iterator over hashable elements.
+    All returned subsets are of type 'frozenset'.
+    If include_empty is set to False, the empty set will not be returned.
+    """
+    start = 0 if include_empty else 1
+    return map(frozenset, chain.from_iterable(combinations(set, r) for r in range(start, len(set) + 1)))
 
 def gbt_m(hypothesis, likelihoods, normalization=True):
     """

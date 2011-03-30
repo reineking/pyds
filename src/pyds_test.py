@@ -7,7 +7,7 @@ Created on Nov 28, 2009
 import unittest
 from math import log
 from itertools import product
-from pyds import MassFunction, gbt_m, gbt_bel, gbt_pl, gbt_q
+from pyds import MassFunction, powerset, gbt_m, gbt_bel, gbt_pl, gbt_q
 import random
 
 
@@ -46,21 +46,39 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(0.0, self.m1[('a',)])
     
     def test_bel(self):
+        # compute the belief of a single hypothesis
         self.assertEqual(0.4, self.m1.bel(('a',)))
         self.assertEqual(0.5, self.m1.bel(('a', 'd')))
         self.assertEqual(1, self.m1.bel(('a', 'b', 'c', 'd')))
-    
-    def test_q(self):
-        self.assertEqual(0.8, self.m1.q(('a',)))
-        self.assertEqual(0.5, self.m1.q(('b',)))
-        self.assertEqual(0.4, self.m1.q(('a', 'd')))
-        self.assertEqual(0.3, self.m1.q(('a', 'b', 'c', 'd')))
+        # compute the entire belief function
+        bel = self.m2.bel()
+        self.assertEqual(8, len(bel))
+        for h, v in bel.items():
+            self.assertEqual(self.m2.bel(h), v)
     
     def test_pl(self):
+        # compute the plausibility of a single hypothesis
         self.assertEqual(0.8, self.m1.pl(('a',)))
         self.assertEqual(0.5, self.m1.pl(('b',)))
         self.assertEqual(0.8, self.m1.pl(('a', 'd')))
         self.assertEqual(1, self.m1.pl(('a', 'b', 'c', 'd')))
+        # compute the entire plausibility function
+        pl = self.m2.pl()
+        self.assertEqual(8, len(pl))
+        for h, v in pl.items():
+            self.assertEqual(self.m2.pl(h), v)
+    
+    def test_q(self):
+        # compute the commonality of a single hypothesis
+        self.assertEqual(0.8, self.m1.q(('a',)))
+        self.assertEqual(0.5, self.m1.q(('b',)))
+        self.assertEqual(0.4, self.m1.q(('a', 'd')))
+        self.assertEqual(0.3, self.m1.q(('a', 'b', 'c', 'd')))
+        # compute the entire commonality function
+        q = self.m2.q()
+        self.assertEqual(8, len(q))
+        for h, v in q.items():
+            self.assertEqual(self.m2.q(h), v)
     
     def test_condition(self):
         m = self.m1.condition(('a', 'd'))
@@ -258,6 +276,19 @@ class PyDSTest(unittest.TestCase):
     def test_sample_probability_distributions(self):
         for p in self.m1.sample_probability_distributions(100):
             self.assertTrue(self.m1.is_compatible(p))
+    
+    def test_powerset(self):
+        s = range(2)
+        p = set(powerset(s))
+        self.assertEqual(4, len(p))
+        self.assertTrue(set() in p)
+        self.assertTrue({0} in p)
+        self.assertTrue({1} in p)
+        self.assertTrue({0, 1} in p)
+        p = set(powerset(s, False))
+        self.assertEqual(3, len(p))
+        self.assertFalse(set() in p)
+        self.assertEqual(2**6, len(list(powerset(range(6)))))
     
     def test_gbt_m(self):
         likelihoods = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 0.5)]
