@@ -112,15 +112,44 @@ class MassFunction(dict):
     
     @staticmethod
     def from_bel(bel):
-        pass
+        """
+        Creates a mass function from a corresponding belief function.
+        
+        'bel' is a dictionary mapping hypotheses to belief values like to one returned by 'bel()'.
+        """
+        m = MassFunction()
+        for h1 in bel.keys():
+            v = sum([bel[h2] * (-1)**(len(h1 - h2)) for h2 in powerset(h1)])
+            if v > 0:
+                m[h1] = v
+        return m
     
     @staticmethod
-    def from_pl(bel):
-        pass
+    def from_pl(pl):
+        """
+        Creates a mass function from a corresponding plausibility function.
+        
+        'pl' is a dictionary mapping hypotheses to plausibility values like to one returned by 'pl()'.
+        """
+        frame = max(pl.keys(), key=len)
+        bel_theta = pl[frame]
+        bel = {frozenset(frame - h):bel_theta - v for h, v in pl.items()} # follows from bel(-A) = bel(frame) - pl(A)
+        return MassFunction.from_bel(bel)
     
     @staticmethod
-    def from_q(bel):
-        pass
+    def from_q(q):
+        """
+        Creates a mass function from a corresponding commonality function.
+        
+        'q' is a dictionary mapping hypotheses to commonality values like to one returned by 'q()'.
+        """
+        m = MassFunction()
+        frame = max(q.keys(), key=len)
+        for h1 in q.keys():
+            v = sum([q[h1 | h2] * (-1)**(len(h2 - h1)) for h2 in powerset(frame - h1)])
+            if v > 0:
+                m[h1] = v
+        return m
     
     def __missing__(self, key):
         """Return 0 mass for hypotheses that are not contained."""
@@ -193,12 +222,6 @@ class MassFunction(dict):
         """Returns the combined core of two or more mass functions as a 'frozenset'."""
         return frozenset.intersection(self.core(), *[m.core() for m in mass_functions])
     
-    def coarsen(self):
-        """
-        TODO:
-        """
-        pass
-    
     def bel(self, hypothesis=None):
         """
         Computes either the belief of 'hypothesis' or the entire belief function (hypothesis=None).
@@ -207,9 +230,9 @@ class MassFunction(dict):
         Otherwise, the belief of 'hypothesis' is returned.
         In this case, 'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
         """
-        if hypothesis is None: # compute bel
+        if hypothesis is None:
             return {h:self.bel(h) for h in powerset(self.core())}
-        else: # compute bel(hypothesis)
+        else:
             hypothesis = MassFunction._convert(hypothesis)
             if not hypothesis:
                 return 0.0

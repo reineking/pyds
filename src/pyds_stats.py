@@ -39,14 +39,35 @@ def random_likelihoods(singleton_count):
     return [(i, random.random()) for i in range(singleton_count)]
 
 
-def time_bel():
+def time_bel_h():
     return measure_time(MassFunction.gbt(random_likelihoods(12)).bel, frozenset(range(10)))
 
-def time_plausibility():
+def time_bel():
+    return measure_time(MassFunction({(s,):1.0 for s in range(12)}).normalize().bel)
+
+def time_from_bel():
+    bel = MassFunction({(s,):1.0 for s in range(10)}).normalize().bel()
+    return measure_time(MassFunction.from_bel, bel)
+
+def time_pl_h():
     return measure_time(MassFunction.gbt(random_likelihoods(12)).pl, frozenset(range(10)))
 
-def time_commonality():
+def time_pl():
+    return measure_time(MassFunction({(s,):1.0 for s in range(12)}).normalize().pl)
+
+def time_from_pl():
+    pl = MassFunction({(s,):1.0 for s in range(10)}).normalize().pl()
+    return measure_time(MassFunction.from_pl, pl)
+
+def time_q_h():
     return measure_time(MassFunction.gbt(random_likelihoods(12)).q, frozenset(range(10)))
+
+def time_q():
+    return measure_time(MassFunction({(s,):1.0 for s in range(12)}).normalize().q)
+
+def time_from_q():
+    q = MassFunction({(s,):1.0 for s in range(10)}).normalize().q()
+    return measure_time(MassFunction.from_q, q)
 
 def time_gbt():
     return measure_time(MassFunction.gbt, random_likelihoods(12))
@@ -65,12 +86,12 @@ def time_combine_conjunctive():
 def time_combine_conjunctive_direct():
     m1 = MassFunction.gbt(random_likelihoods(6))
     m2 = MassFunction.gbt(random_likelihoods(6))
-    return measure_time(m1.combine_conjunctive, m2, 1000, 'direct')
+    return measure_time(m1.combine_conjunctive, m2, 1000, False)
 
 def time_combine_conjunctive_importance():
     m1 = MassFunction.gbt(random_likelihoods(6))
     m2 = MassFunction.gbt(random_likelihoods(6))
-    return measure_time(m1.combine_conjunctive, m2, 1000, 'importance')
+    return measure_time(m1.combine_conjunctive, m2, 1000, True)
 
 def time_combine_disjunctive():
     m1 = MassFunction.gbt(random_likelihoods(6))

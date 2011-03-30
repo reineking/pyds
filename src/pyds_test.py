@@ -56,6 +56,10 @@ class PyDSTest(unittest.TestCase):
         for h, v in bel.items():
             self.assertEqual(self.m2.bel(h), v)
     
+    def test_from_bel(self):
+        self._assert_equal_belief(self.m2, MassFunction.from_bel(self.m2.bel()), 8)
+        self._assert_equal_belief(self.m1, MassFunction.from_bel(self.m1.bel()), 8)
+    
     def test_pl(self):
         # compute the plausibility of a single hypothesis
         self.assertEqual(0.8, self.m1.pl(('a',)))
@@ -68,6 +72,10 @@ class PyDSTest(unittest.TestCase):
         for h, v in pl.items():
             self.assertEqual(self.m2.pl(h), v)
     
+    def test_from_pl(self):
+        self._assert_equal_belief(self.m2, MassFunction.from_pl(self.m2.pl()), 8)
+        self._assert_equal_belief(self.m1, MassFunction.from_pl(self.m1.pl()), 8)
+    
     def test_q(self):
         # compute the commonality of a single hypothesis
         self.assertEqual(0.8, self.m1.q(('a',)))
@@ -79,6 +87,10 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(8, len(q))
         for h, v in q.items():
             self.assertEqual(self.m2.q(h), v)
+    
+    def test_from_q(self):
+        self._assert_equal_belief(self.m2, MassFunction.from_q(self.m2.q()), 8)
+        self._assert_equal_belief(self.m1, MassFunction.from_q(self.m1.q()), 8)
     
     def test_condition(self):
         m = self.m1.condition(('a', 'd'))
