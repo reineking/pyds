@@ -21,10 +21,10 @@ def stats(results):
         array[i] = t
     return array.mean(), array.std()
 
-def measure_time(f, *args):
+def measure_time(f, *args, **kwargs):
     def f_measured(i):
         t = time.clock()
-        f(*args)
+        f(*args, **kwargs)
         return time.clock() - t
     return stats(map(f_measured, range(iterations)))
 
@@ -40,7 +40,7 @@ def random_likelihoods(singleton_count):
 
 
 def time_bel_h():
-    return measure_time(MassFunction.gbt(random_likelihoods(12)).bel, frozenset(range(10)))
+    return measure_time(MassFunction.gbt(random_likelihoods(12)).bel, hypothesis=frozenset(range(10)))
 
 def time_bel():
     return measure_time(MassFunction({(s,):1.0 for s in range(12)}).normalize().bel)
@@ -86,12 +86,12 @@ def time_combine_conjunctive():
 def time_combine_conjunctive_direct():
     m1 = MassFunction.gbt(random_likelihoods(6))
     m2 = MassFunction.gbt(random_likelihoods(6))
-    return measure_time(m1.combine_conjunctive, m2, 1000, False)
+    return measure_time(m1.combine_conjunctive, m2, sample_count=1000, importance_sampling=False)
 
 def time_combine_conjunctive_importance():
     m1 = MassFunction.gbt(random_likelihoods(6))
     m2 = MassFunction.gbt(random_likelihoods(6))
-    return measure_time(m1.combine_conjunctive, m2, 1000, True)
+    return measure_time(m1.combine_conjunctive, m2, sample_count=1000, importance_sampling=True)
 
 def time_combine_disjunctive():
     m1 = MassFunction.gbt(random_likelihoods(6))

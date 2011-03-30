@@ -105,11 +105,11 @@ class PyDSTest(unittest.TestCase):
             self.assertAlmostEqual(0.06 / (1.0 - empty), m[('c',)], places)
             self.assertAlmostEqual(0.09 / (1.0 - empty), m[('a', 'c')], places)
         test(self.m1 & self.m2, 10)
-        test(self.m1.combine_conjunctive(self.m2, 10000), 1)
-        test(self.m1.combine_conjunctive(self.m2, 1000, importance_sampling=True), 12)
+        test(self.m1.combine_conjunctive(self.m2, sample_count=10000), 1)
+        test(self.m1.combine_conjunctive(self.m2, sample_count=1000, importance_sampling=True), 12)
         # combine multiple mass functions
         m_single = self.m1.combine_conjunctive(self.m1).combine_conjunctive(self.m2)
-        m_multi = self.m1.combine_conjunctive([self.m1, self.m2])
+        m_multi = self.m1.combine_conjunctive(self.m1, self.m2)
         for h, v in m_single.items():
             self.assertAlmostEqual(v, m_multi[h])
     
@@ -124,10 +124,10 @@ class PyDSTest(unittest.TestCase):
             self.assertAlmostEqual(0.05, m[('a', 'c', 'd')], places)
             self.assertAlmostEqual(0.3, m[('a', 'b', 'c', 'd')], places)
         test(self.m1 | self.m2, 10)
-        test(self.m1.combine_disjunctive(self.m2, 10000), 2)
+        test(self.m1.combine_disjunctive(self.m2, sample_count=10000), 2)
         # combine multiple mass functions
         m_single = self.m1.combine_disjunctive(self.m1).combine_disjunctive(self.m2)
-        m_multi = self.m1.combine_disjunctive([self.m1, self.m2])
+        m_multi = self.m1.combine_disjunctive(self.m1, self.m2)
         for h, v in m_single.items():
             self.assertAlmostEqual(v, m_multi[h])
     
@@ -255,10 +255,9 @@ class PyDSTest(unittest.TestCase):
         self.m1[{'a', 'b', 'c', 'd'}] = 0
         self.assertEqual({'a', 'b', 'd'}, self.m1.core())
         self.assertEqual(set(), MassFunction().core())
-    
-    def test_combined_core(self):
-        self.assertEqual({'a', 'b', 'c'}, self.m1.combined_core(self.m2))
-    
+        # test combined core
+        self.assertEqual({'a', 'b'}, self.m1.core(self.m2))
+        
     def test_combine_gbt(self):
         pl = [('b', 0.8), ('c', 0.5)]
         correct = self.m1.combine_conjunctive(MassFunction.gbt(pl))

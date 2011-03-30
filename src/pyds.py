@@ -205,22 +205,22 @@ class MassFunction(dict):
         """
         return {h for h, v in self.items() if v > 0}
     
-    def core(self):
+    def core(self, *mass_functions):
         """
-        Returns the core of the mass function as a 'frozenset'.
+        Returns the core of one or more mass functions as a 'frozenset'.
         
-        The core is the union of all focal hypotheses.
-        In case the mass function does not contain any focal hypotheses, an empty set is returned.
+        The core of a single mass function is the union of all its focal hypotheses.
+        In case a mass function does not contain any focal hypotheses, its core is an empty set.
+        If multiple mass functions are given, their combined core (intersection of all single cores) is returned.
         """
-        focal = self.focal()
-        if not focal:
-            return frozenset()
+        if mass_functions:
+            return frozenset.intersection(self.core(), *[m.core() for m in mass_functions])
         else:
-            return frozenset.union(*focal)
-    
-    def combined_core(self, *mass_functions):
-        """Returns the combined core of two or more mass functions as a 'frozenset'."""
-        return frozenset.intersection(self.core(), *[m.core() for m in mass_functions])
+            focal = self.focal()
+            if not focal:
+                return frozenset()
+            else:
+                return frozenset.union(*focal)
     
     def bel(self, hypothesis=None):
         """
@@ -282,7 +282,7 @@ class MassFunction(dict):
         hyp = sorted([(v, h) for (h, v) in self.items()], reverse=True)
         return "{" + ";".join([str(tuple(h)) + ":" + str(v) for (v, h) in hyp]) + "}"
     
-    def combine_conjunctive(self, mass_function, normalization=True, sample_count=None, importance_sampling=False):
+    def combine_conjunctive(self, *mass_functions, normalization=True, sample_count=None, importance_sampling=False):
         """
         Conjunctively combines the mass function with another mass function and returns the combination as a new mass function.
         
@@ -299,9 +299,9 @@ class MassFunction(dict):
         If importance_sampling=True, importance sampling is used to avoid empty intersections, which leads to a lower approximation error but is also slower.
         This method should be used if there is significant evidential conflict between the mass functions.
         """
-        return self._combine(mass_function, lambda s1, s2: s1 & s2, normalization, sample_count, importance_sampling)
+        return self._combine(*mass_functions, rule=lambda s1, s2: s1 & s2, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling)
     
-    def combine_disjunctive(self, mass_function, sample_count=None):
+    def combine_disjunctive(self, *mass_functions, sample_count=None):
         """
         Disjunctively combines the mass function with another mass function and returns the combination as a new mass function.
         
@@ -310,28 +310,31 @@ class MassFunction(dict):
         
         If 'sample_count' is not None, the true combination is approximated using the specified number of samples.
         """
-        return self._combine(mass_function, lambda s1, s2: s1 | s2, False, sample_count, False)
+        return self._combine(*mass_functions, rule=lambda s1, s2: s1 | s2, normalization=False, sample_count=sample_count, importance_sampling=False)
     
-    def _combine(self, mass_function, rule, normalization, sample_count, importance_sampling):
+    def _combine(self, *mass_functions, rule, normalization, sample_count, importance_sampling):
         """Helper method for combining two or more mass functions."""
-        if not isinstance(mass_function, MassFunction):
-            f = partial(MassFunction._combine, rule=rule, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling)
-            return reduce(f, [self] + mass_function)
-        if not isinstance(mass_function, MassFunction):
-            raise TypeError("expected type MassFunction")
-        if not self or not mass_function:
-            return MassFunction()
-        if sample_count == None:
-            m = self._combine_deterministic(mass_function, rule)
-        else:
-            if importance_sampling:
-                m = self._combine_importance_sampling(mass_function, sample_count)
+        combined = self
+        for m in mass_functions:
+            if not isinstance(m, MassFunction):
+                raise TypeError("expected type MassFunction but got %s; make sure to use keyword arguments for anything other than mass functions" % type(m))
+            if sample_count == None:
+                combined = combined._combine_deterministic(m, rule)
             else:
-                m = self._combine_direct_sampling(mass_function, rule, sample_count)
+                if importance_sampling:
+                    combined = combined._combine_importance_sampling(m, sample_count)
+                else:
+                    combined = combined._combine_direct_sampling(m, rule, sample_count)
+#        if not isinstance(mass_function, MassFunction):
+#            f = partial(MassFunction._combine, rule=rule, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling)
+#            return reduce(f, [self] + mass_function)
+        
+#        if not self or not mass_function:
+#            return MassFunction()
         if normalization:
-            return m.normalize()
+            return combined.normalize()
         else:
-            return m
+            return combined
     
     def _combine_deterministic(self, mass_function, rule):
         """Helper method for deterministically combining two mass functions."""
@@ -422,7 +425,7 @@ class MassFunction(dict):
         
         Shorthand for self.combine_conjunctive(MassFunction({hypothesis:1.0}), normalization).
         """
-        return self.combine_conjunctive(MassFunction({hypothesis:1.0}), normalization)
+        return self.combine_conjunctive(MassFunction({hypothesis:1.0}), normalization=normalization)
     
     def conflict(self, mass_function):
         """
