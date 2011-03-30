@@ -17,7 +17,7 @@
 
 
 """
-Tools for performing computations in the Dempster-Shafer framework.
+A framework for performing computations in the Dempster-Shafer theory.
 """
 
 from itertools import product
@@ -29,9 +29,11 @@ from random import random, shuffle, uniform
 
 class MassFunction(dict):
     """
-    A Dempster-Shafer mass function (basic belief assignment) based on a dictionary.
+    A Dempster-Shafer mass function (basic probability assignment) based on a dictionary.
     
     Both normalized and unnormalized mass functions are supported.
+    The underlying frame of discernment is assumed to be discrete.
+    
     Hypotheses and their associated mass values can be added/changed/removed using the standard dictionary methods.
     Each hypothesis can be an arbitrary sequence which is automatically converted to a 'frozenset', meaning its elements must be hashable.
     """
@@ -142,9 +144,9 @@ class MassFunction(dict):
     def __delitem__(self, hypothesis):
         return dict.__delitem__(self, MassFunction._convert(hypothesis))
     
-    def frame_of_discernment(self):
+    def frame(self):
         """
-        Returns the frame of discernment as a 'frozenset'.
+        Returns the frame of discernment of the mass function as a 'frozenset'.
         
         The frame of discernment is the union of all contained hypotheses.
         In case the mass function does not contain any hypotheses, an empty set is returned.
@@ -153,6 +155,37 @@ class MassFunction(dict):
             return frozenset()
         else:
             return frozenset.union(*self.keys())
+    
+    def focal(self):
+        """
+        Returns the set of all focal hypotheses.
+        
+        A focal hypothesis has a mass value greater than 0.
+        """
+        return {h for h, v in self.items() if v > 0}
+    
+    def core(self):
+        """
+        Returns the core of the mass function as a 'frozenset'.
+        
+        The core is the union of all focal hypotheses.
+        In case the mass function does not contain any focal hypotheses, an empty set is returned.
+        """
+        focal = self.focal()
+        if not focal:
+            return frozenset()
+        else:
+            return frozenset.union(*focal)
+    
+    def combined_core(self, *mass_functions):
+        """Returns the combined core of two or more mass functions as a 'frozenset'."""
+        return frozenset.intersection(self.core(), *[m.core() for m in mass_functions])
+    
+    def coarsen(self):
+        """
+        TODO:
+        """
+        pass
     
     def bel(self, hypothesis):
         """
@@ -187,12 +220,33 @@ class MassFunction(dict):
         hypothesis = MassFunction._convert(hypothesis)
         return sum([v for h, v in self.items() if h.issuperset(hypothesis)])
     
+    def belief_function(self):
+        """
+        TODO:
+        """
+        bel = None
+        return bel
+    
+    def plausibility_function(self):
+        """
+        TODO:
+        """
+        bel = None
+        return bel
+    
+    def commonality_function(self):
+        """
+        TODO:
+        """
+        bel = None
+        return bel
+    
     def __and__(self, mass_function):
-        """Shorthand for 'combine_conjunctive'."""
+        """Shorthand for 'combine_conjunctive(mass_function)'."""
         return self.combine_conjunctive(mass_function)
     
     def __or__(self, mass_function):
-        """Shorthand for 'combine_disjunctive'."""
+        """Shorthand for 'combine_disjunctive(mass_function)'."""
         return self.combine_disjunctive(mass_function)
     
     def __str__(self):
@@ -298,7 +352,7 @@ class MassFunction(dict):
         """
         combined = MassFunction()
         # restrict to generally compatible likelihoods
-        frame = self.frame_of_discernment()
+        frame = self.frame()
         likelihoods = [l for l in likelihoods if l[1] > 0 and l[0] in frame]
         if sample_count == None:    # deterministic
             return self.combine_conjunctive(MassFunction.gbt(likelihoods))
@@ -345,7 +399,8 @@ class MassFunction(dict):
         """
         Calculates the weight of conflict between two mass functions.
         
-        It is defined as the logarithm of the normalization constant in Dempster's rule of combination.
+        The weight of conflict is computed as the (natural) logarithm of the normalization constant in Dempster's rule of combination.
+        Returns infinity in case the mass functions are flatly contradicting.
         """ 
         c = 0.0
         for h1, v1 in self.items():
@@ -361,7 +416,7 @@ class MassFunction(dict):
         """
         Normalizes the mass function in-place such that the sum of all mass values equals 1.
         
-        It does not set the mass value corresponding to the empty set to 0 and only asserts that the mass values sum to 1.
+        It does not set the mass value of the empty set to 0 and only asserts that the mass values sum to 1.
         For convenience, the method returns 'self'.
         """
         mass_sum = sum(self.values())
@@ -426,7 +481,7 @@ class MassFunction(dict):
         return projected
     
     def pignistic(self):
-        """Computes the pignistic transformation of the mass function."""
+        """Computes the pignistic transformation and returns a mass function consisting only of singletons."""
         p = MassFunction()
         for h, v in self.items():
             for s in h:
@@ -436,6 +491,8 @@ class MassFunction(dict):
     def local_conflict(self):
         """
         Computes the local conflict measure.
+        
+        See 
         """
         c = 0.0
         for h, v in self.items():
@@ -465,7 +522,7 @@ class MassFunction(dict):
         """
         Computes the p-norm between two mass functions.
         
-        TODO:
+        Both mass functions are treated as vectors of mass values.
         """
         d = sum([(v - m[h])**p for h, v in self.items()])
         for h, v in m.items():
@@ -473,33 +530,25 @@ class MassFunction(dict):
                 d += v**p
         return d**(1.0 / p)
     
-    def prune(self, hypotheses_tree):
+    def prune(self, max_mass=0.0):
         """
-        Restricts the distribution to a tree-like hypothesis space.
+        Removes all hypotheses whose mass value is less than or equal to 'max_mass'.
         
-        Removes all hypotheses that are not part of the tree and reassigns their
-        mass values by preserving the pignistic transform and maximizing the Hartley measure.
-        'hypotheses_tree' is a list of tree nodes.
+        By default (max_mass=0.0), only non-focal hypotheses are removed.
+        Afterwards, the mass function is normalized.
+        For convenience, the method returns 'self'.
         """ 
-        hypotheses_tree = [frozenset(h) for h in sorted(hypotheses_tree, key=lambda h: -len(h))]
-        pruned = MassFunction()
-        for h, v in self.items():
-            size = len(h)
-            for node in hypotheses_tree:
-                if h.issuperset(node):
-                    pruned[node] += len(node) * v / size
-                    h -= node
-                    if len(h) == 0:
-                        break
-        return pruned
+        remove = [h for h, v in self.items() if v <= max_mass]
+        for h in remove:
+            del self[h]
+        return self.normalize()
     
     def is_normalized(self, epsilon=0.0):
         """
-        Checks whether the mass function is normalized.
+        Checks whether the mass values sum to 1.
         
-        TODO: only checks mass values, not emptyset
-        
-        It is normalized if the absolute difference between 1 and the sum of all mass values is smaller than or equal to epsilon. 
+        'epsilon' specifies the tolerance interval and defaults to 0.
+        Note that this method only checks the total amount of assigned mass including the mass corresponding to the empty set.
         """
         return abs(sum(self.values()) - 1.0) <= epsilon
     

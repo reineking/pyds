@@ -14,13 +14,18 @@ import random
 class PyDSTest(unittest.TestCase):
 
     def setUp(self):
-        self.m1 = MassFunction([(('a',), 0.4), (('b',), 0.2), (('a', 'd'), 0.1), (('a', 'b', 'c', 'd'), 0.3)])
-        self.m2 = MassFunction([(('b',), 0.5), (('c',), 0.2), (('a', 'c'), 0.3)])
-        random.seed(0)
+        self.m1 = MassFunction({('a',):0.4, ('b',):0.2, ('a', 'd'):0.1, ('a', 'b', 'c', 'd'):0.3})
+        self.m2 = MassFunction({('b',):0.5, ('c',):0.2, ('a', 'c'):0.3})
+        random.seed(0) # make tests deterministic
     
     def _assert_equal_belief(self, m1, m2, places):
-        for h in m1.frame_of_discernment() | m2.frame_of_discernment():
+        for h in m1.frame() | m2.frame():
             self.assertAlmostEqual(m1[h], m2[h], places)
+    
+    def test_init(self):
+        """Test equivalence of different mass function initialization methods."""
+        m1 = MassFunction([(('a',), 0.4), (('b',), 0.2), (('a', 'd'), 0.1), (('a', 'b', 'c', 'd'), 0.3)])
+        self.assertEqual(self.m1, m1)
     
     def test_items(self):
         self.assertEqual(0.0, self.m1['x'])
@@ -98,6 +103,7 @@ class PyDSTest(unittest.TestCase):
     
     def test_conflict(self):
         self.assertEqual(-log(0.55, 2), self.m1.conflict(self.m2));
+        self.assertEqual(float('inf'), self.m1.conflict(MassFunction({'e': 1})));
     
     def test_normalize(self):
         v = self.m1[('a',)]
@@ -149,20 +155,21 @@ class PyDSTest(unittest.TestCase):
 #        self.assertEqual(sqrt(0.5*(0.3**2+0.7**2+1)), m3.distance(MassFunction([(('x',), 1.0)])))
 #        self.assertEqual(sqrt(0.5*(0.5**2+0.2*0.3+0.3*0.45+1)), self.m2.distance(MassFunction([(('x',), 1.0)])))
     
-    def test_distance_pnorm(self):
-        self.assertEqual(0, self.m1.distance_pnorm(self.m1))
-        self.assertEqual(0, self.m1.distance_pnorm(self.m1, p = 1))
+    def test_norm(self):
+        self.assertEqual(0, self.m1.norm(self.m1))
+        self.assertEqual(0, self.m1.norm(self.m1, p = 1))
         m3 = MassFunction([(('e',), 1)])
         len_m1 = sum([v**2 for v in self.m1.values()])
-        self.assertEqual((1 + len_m1)**0.5, self.m1.distance_pnorm(m3))
+        self.assertEqual((1 + len_m1)**0.5, self.m1.norm(m3))
 
     def test_prune(self):
-        m = MassFunction([(('a', 'b'), 0.8), (('b', 'c'), 0.2)])
-        m = m.prune([('a',), ('a', 'b', 'c'), ('c',), ('a', 'b'), ('b',)])
-        self.assertEqual(3, len(m))
-        self.assertEqual(0.8, m[('a', 'b')])
-        self.assertEqual(0.1, m[('b',)])
-        self.assertEqual(0.1, m[('c',)])
+        m = MassFunction({('a', 'b'):1.0, ('b',):0.0})
+        self.assertEqual(MassFunction({('a', 'b'):1.0}), m.prune())
+        m1 = self.m1.copy()
+        m1.prune(0.1)
+        self.assertFalse({'a', 'd'} in m1)
+        for h, v in m1.items():
+            self.assertEqual(self.m1[h] / 0.9, v)
     
     def test_sample(self):
         sample_count = 1000
@@ -170,9 +177,9 @@ class PyDSTest(unittest.TestCase):
         samples_ml = self.m1.sample(sample_count, maximum_likelihood=True)
         self.assertEqual(sample_count, len(samples_ran))
         self.assertEqual(sample_count, len(samples_ml))
-        for k, v in self.m1.items():
-            self.assertAlmostEqual(v, float(samples_ran.count(k)) / sample_count, places=1)
-            self.assertAlmostEqual(v, float(samples_ml.count(k)) / sample_count, places=20)
+        for h, v in self.m1.items():
+            self.assertAlmostEqual(v, float(samples_ran.count(h)) / sample_count, places=1)
+            self.assertAlmostEqual(v, float(samples_ml.count(h)) / sample_count, places=20)
         self.assertEqual(0, len(MassFunction().sample(sample_count)))
     
     def test_markov_update(self):
@@ -200,9 +207,27 @@ class PyDSTest(unittest.TestCase):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
         self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, 10000), 2)
     
-    def test_frame_of_discernment(self):
-        self.assertEqual(frozenset(['a', 'b', 'c', 'd']), self.m1.frame_of_discernment())
-        self.assertEqual(frozenset(['a', 'b', 'c']), self.m2.frame_of_discernment())
+    def test_frame(self):
+        self.assertEqual({'a', 'b', 'c', 'd'}, self.m1.frame())
+        self.assertEqual({'a', 'b', 'c'}, self.m2.frame())
+        self.assertEqual(set(), MassFunction().frame())
+    
+    def test_focal(self):
+        self.assertEqual(4, len(list(self.m1.focal())))
+        for f in self.m1.focal():
+            self.assertTrue(f in self.m1, f)
+        self.m1[{'b'}] = 0
+        self.assertEqual(3, len(self.m1.focal()))
+        self.assertFalse({'b'} in self.m1.focal())
+    
+    def test_core(self):
+        self.assertEqual({'a', 'b', 'c', 'd'}, self.m1.core())
+        self.m1[{'a', 'b', 'c', 'd'}] = 0
+        self.assertEqual({'a', 'b', 'd'}, self.m1.core())
+        self.assertEqual(set(), MassFunction().core())
+    
+    def test_combined_core(self):
+        self.assertEqual({'a', 'b', 'c'}, self.m1.combined_core(self.m2))
     
     def test_combine_gbt(self):
         pl = [('b', 0.8), ('c', 0.5)]
