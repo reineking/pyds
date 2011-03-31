@@ -16,6 +16,7 @@ class PyDSTest(unittest.TestCase):
     def setUp(self):
         self.m1 = MassFunction({('a',):0.4, ('b',):0.2, ('a', 'd'):0.1, ('a', 'b', 'c', 'd'):0.3})
         self.m2 = MassFunction({('b',):0.5, ('c',):0.2, ('a', 'c'):0.3})
+        self.m3 = MassFunction({():0.4, ('c',):0.2, ('a', 'c'):0.3, ('a', 'b'):0.1}) # unnormalized mass function
         random.seed(0) # make tests deterministic
     
     def _assert_equal_belief(self, m1, m2, places):
@@ -37,7 +38,7 @@ class PyDSTest(unittest.TestCase):
         for k in self.m1.keys():
             self.assertEqual(self.m1.bel(k), c.bel(k))
         c[{'a'}] = 0.3
-        # assert that the original objects remains unchanged
+        # assert that the original object remains unchanged
         self.assertEqual(0.4, self.m1[{'a'}])
     
     def test_del(self):
@@ -47,55 +48,92 @@ class PyDSTest(unittest.TestCase):
     
     def test_bel(self):
         # compute the belief of a single hypothesis
-        self.assertEqual(0.4, self.m1.bel(('a',)))
-        self.assertEqual(0.5, self.m1.bel(('a', 'd')))
-        self.assertEqual(1, self.m1.bel(('a', 'b', 'c', 'd')))
+        self.assertEqual(0.4, self.m1.bel({'a'}))
+        self.assertEqual(0.5, self.m1.bel({'a', 'd'}))
+        self.assertEqual(1, self.m1.bel({'a', 'b', 'c', 'd'}))
+        self.assertEqual(0.0, self.m3.bel(set()))
+        self.assertEqual(0.0, self.m3.bel({'a'}))
+        self.assertEqual(0.5, self.m3.bel({'a', 'c'}))
+        self.assertAlmostEqual(0.6, self.m3.bel({'a', 'b', 'c'}))
         # compute the entire belief function
-        bel = self.m2.bel()
-        self.assertEqual(8, len(bel))
-        for h, v in bel.items():
+        bel2 = self.m2.bel()
+        self.assertEqual(8, len(bel2))
+        for h, v in bel2.items():
             self.assertEqual(self.m2.bel(h), v)
+        bel3 = self.m3.bel()
+        self.assertEqual(8, len(bel3))
+        for h, v in bel3.items():
+            self.assertEqual(self.m3.bel(h), v)
     
     def test_from_bel(self):
-        self._assert_equal_belief(self.m2, MassFunction.from_bel(self.m2.bel()), 8)
         self._assert_equal_belief(self.m1, MassFunction.from_bel(self.m1.bel()), 8)
+        self._assert_equal_belief(self.m2, MassFunction.from_bel(self.m2.bel()), 8)
+        self._assert_equal_belief(self.m3, MassFunction.from_bel(self.m3.bel()), 8)
     
     def test_pl(self):
         # compute the plausibility of a single hypothesis
-        self.assertEqual(0.8, self.m1.pl(('a',)))
-        self.assertEqual(0.5, self.m1.pl(('b',)))
-        self.assertEqual(0.8, self.m1.pl(('a', 'd')))
-        self.assertEqual(1, self.m1.pl(('a', 'b', 'c', 'd')))
+        self.assertEqual(0.8, self.m1.pl({'a'}))
+        self.assertEqual(0.5, self.m1.pl({'b'}))
+        self.assertEqual(0.8, self.m1.pl({'a', 'd'}))
+        self.assertEqual(1, self.m1.pl({'a', 'b', 'c', 'd'}))
+        self.assertEqual(0.0, self.m3.pl(set()))
+        self.assertAlmostEqual(0.1, self.m3.pl({'b'}))
+        self.assertAlmostEqual(0.6, self.m3.pl({'a', 'b', 'c'}))
         # compute the entire plausibility function
-        pl = self.m2.pl()
-        self.assertEqual(8, len(pl))
-        for h, v in pl.items():
+        pl2 = self.m2.pl()
+        self.assertEqual(8, len(pl2))
+        for h, v in pl2.items():
             self.assertEqual(self.m2.pl(h), v)
+        pl3 = self.m3.pl()
+        self.assertEqual(8, len(pl3))
+        for h, v in pl3.items():
+            self.assertEqual(self.m3.pl(h), v)
     
     def test_from_pl(self):
-        self._assert_equal_belief(self.m2, MassFunction.from_pl(self.m2.pl()), 8)
         self._assert_equal_belief(self.m1, MassFunction.from_pl(self.m1.pl()), 8)
+        self._assert_equal_belief(self.m2, MassFunction.from_pl(self.m2.pl()), 8)
+        self._assert_equal_belief(self.m3, MassFunction.from_pl(self.m3.pl()), 8)
     
     def test_q(self):
         # compute the commonality of a single hypothesis
-        self.assertEqual(0.8, self.m1.q(('a',)))
-        self.assertEqual(0.5, self.m1.q(('b',)))
-        self.assertEqual(0.4, self.m1.q(('a', 'd')))
-        self.assertEqual(0.3, self.m1.q(('a', 'b', 'c', 'd')))
+        self.assertEqual(0.8, self.m1.q({'a'}))
+        self.assertEqual(0.5, self.m1.q({'b'}))
+        self.assertEqual(0.4, self.m1.q({'a', 'd'}))
+        self.assertEqual(0.3, self.m1.q({'a', 'b', 'c', 'd'}))
+        self.assertEqual(0.0, self.m3.q(set()))
+        self.assertEqual(0.4, self.m3.q({'a'}))
+        self.assertEqual(0.3, self.m3.q({'a', 'c'}))
         # compute the entire commonality function
-        q = self.m2.q()
-        self.assertEqual(8, len(q))
-        for h, v in q.items():
+        q2 = self.m2.q()
+        self.assertEqual(8, len(q2))
+        for h, v in q2.items():
             self.assertEqual(self.m2.q(h), v)
+        q3 = self.m3.q()
+        self.assertEqual(8, len(q3))
+        for h, v in q3.items():
+            self.assertEqual(self.m3.q(h), v)
     
     def test_from_q(self):
-        self._assert_equal_belief(self.m2, MassFunction.from_q(self.m2.q()), 8)
         self._assert_equal_belief(self.m1, MassFunction.from_q(self.m1.q()), 8)
+        self._assert_equal_belief(self.m2, MassFunction.from_q(self.m2.q()), 8)
+        self._assert_equal_belief(self.m3, MassFunction.from_q(self.m3.q()), 8)
     
     def test_condition(self):
-        m = self.m1.condition(('a', 'd'))
-        self.assertEqual(0.5, m[('a',)])
-        self.assertEqual(0.5, m[('a', 'd')])
+        m1 = self.m1.condition({'a', 'd'})
+        self.assertEqual(0.5, m1[{'a'}])
+        self.assertEqual(0.5, m1[{'a', 'd'}])
+        m1_un = self.m1.condition({'a', 'd'}, normalization=False)
+        self.assertEqual(0.2, m1_un[set()])
+        self.assertEqual(0.4, m1_un[{'a'}])
+        self.assertEqual(0.4, m1_un[{'a', 'd'}])
+        m3 = self.m3.condition({'a', 'c'})
+        self.assertEqual(0.5, m3[{'a', 'c'}])
+        self.assertAlmostEqual(1.0 / 3.0, m3[{'c'}])
+        self.assertAlmostEqual(1.0 / 6.0, m3[{'a'}])
+        m3_un = self.m3.condition({'a', 'b'}, normalization=False)
+        self.assertAlmostEqual(0.6, m3_un[set()])
+        self.assertEqual(0.3, m3_un[{'a'}])
+        self.assertEqual(0.1, m3_un[{'a', 'b'}])
     
     def test_combine_conjunctive(self):
         empty = 0.45
@@ -195,11 +233,6 @@ class PyDSTest(unittest.TestCase):
     def test_prune(self):
         m = MassFunction({('a', 'b'):1.0, ('b',):0.0})
         self.assertEqual(MassFunction({('a', 'b'):1.0}), m.prune())
-        m1 = self.m1.copy()
-        m1.prune(0.1)
-        self.assertFalse({'a', 'd'} in m1)
-        for h, v in m1.items():
-            self.assertEqual(self.m1[h] / 0.9, v)
     
     def test_sample(self):
         sample_count = 1000
@@ -262,8 +295,8 @@ class PyDSTest(unittest.TestCase):
         pl = [('b', 0.8), ('c', 0.5)]
         correct = self.m1.combine_conjunctive(MassFunction.gbt(pl))
         self._assert_equal_belief(correct, self.m1.combine_gbt(pl), 10)
-        self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, 10000), 1)
-        self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, 10000), 1)
+        self._assert_equal_belief(self.m1.combine_gbt(pl), self.m1.combine_gbt(pl, sample_count=10000), 1)
+        self._assert_equal_belief(self.m2.combine_gbt(pl), self.m2.combine_gbt(pl, sample_count=10000), 1)
         # Bayesian special case
         p_prior = self.m1.pignistic()
         p_posterior = p_prior.combine_gbt(pl)
@@ -296,9 +329,6 @@ class PyDSTest(unittest.TestCase):
         self.assertTrue({0} in p)
         self.assertTrue({1} in p)
         self.assertTrue({0, 1} in p)
-        p = set(powerset(s, False))
-        self.assertEqual(3, len(p))
-        self.assertFalse(set() in p)
         self.assertEqual(2**6, len(list(powerset(range(6)))))
     
     def test_gbt_m(self):

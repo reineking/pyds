@@ -21,9 +21,9 @@ A framework for performing computations in the Dempster-Shafer theory.
 """
 
 from itertools import chain, combinations, product
-from functools import partial, reduce
+from functools import reduce
 from operator import mul
-from math import log, sqrt
+from math import log, sqrt, fsum
 from random import random, shuffle, uniform
 
 
@@ -49,7 +49,7 @@ class MassFunction(dict):
         if source != None:
             if isinstance(source, dict):
                 source = source.items()
-            for h, v in source:
+            for (h, v) in source:
                 self[h] += v
     
     @staticmethod
@@ -82,9 +82,7 @@ class MassFunction(dict):
         if sample_count == None:   # deterministic
             def traverse(m, likelihoods, ones, index, hyp, mass):
                 if index == len(likelihoods):
-                    hyp += ones
-                    if not normalization or len(hyp) > 0:
-                        m[hyp] = mass
+                    m[hyp + ones] = mass
                 else:
                     traverse(m, likelihoods, ones, index + 1, hyp + [likelihoods[index][0]], mass * likelihoods[index][1])
                     traverse(m, likelihoods, ones, index + 1, hyp, mass * (1.0 - likelihoods[index][1]))
@@ -92,7 +90,8 @@ class MassFunction(dict):
             if normalization:
                 m.normalize()
         else:   # Monte-Carlo
-            empty_mass = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
+            if normalization:
+                empty_mass = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
             for _ in range(sample_count):
                 rv = [random() for _ in range(len(likelihoods))]
                 subtree_mass = 1.0
@@ -119,7 +118,7 @@ class MassFunction(dict):
         """
         m = MassFunction()
         for h1 in bel.keys():
-            v = sum([bel[h2] * (-1)**(len(h1 - h2)) for h2 in powerset(h1)])
+            v = fsum([bel[h2] * (-1)**(len(h1 - h2)) for h2 in powerset(h1)])
             if v > 0:
                 m[h1] = v
         return m
@@ -133,7 +132,7 @@ class MassFunction(dict):
         """
         frame = max(pl.keys(), key=len)
         bel_theta = pl[frame]
-        bel = {frozenset(frame - h):bel_theta - v for h, v in pl.items()} # follows from bel(-A) = bel(frame) - pl(A)
+        bel = {frozenset(frame - h):bel_theta - v for (h, v) in pl.items()} # follows from bel(-A) = bel(frame) - pl(A)
         return MassFunction.from_bel(bel)
     
     @staticmethod
@@ -146,7 +145,7 @@ class MassFunction(dict):
         m = MassFunction()
         frame = max(q.keys(), key=len)
         for h1 in q.keys():
-            v = sum([q[h1 | h2] * (-1)**(len(h2 - h1)) for h2 in powerset(frame - h1)])
+            v = fsum([q[h1 | h2] * (-1)**(len(h2 - h1)) for h2 in powerset(frame - h1)])
             if v > 0:
                 m[h1] = v
         return m
@@ -203,7 +202,7 @@ class MassFunction(dict):
         
         A focal hypothesis has a mass value greater than 0.
         """
-        return {h for h, v in self.items() if v > 0}
+        return {h for (h, v) in self.items() if v > 0}
     
     def core(self, *mass_functions):
         """
@@ -237,7 +236,7 @@ class MassFunction(dict):
             if not hypothesis:
                 return 0.0
             else:
-                return sum([v for h, v in self.items() if hypothesis.issuperset(h)])
+                return fsum([v for (h, v) in self.items() if h and hypothesis.issuperset(h)])
     
     def pl(self, hypothesis=None):
         """
@@ -254,7 +253,7 @@ class MassFunction(dict):
             if not hypothesis:
                 return 0.0
             else:
-                return sum([v for h, v in self.items() if hypothesis & h])
+                return fsum([v for (h, v) in self.items() if hypothesis & h])
     
     def q(self, hypothesis=None):
         """
@@ -267,8 +266,10 @@ class MassFunction(dict):
         if hypothesis is None:
             return {h:self.q(h) for h in powerset(self.core())}
         else:
-            hypothesis = MassFunction._convert(hypothesis)
-            return sum([v for h, v in self.items() if h.issuperset(hypothesis)])
+            if not hypothesis:
+                return 0.0
+            else:
+                return fsum([v for (h, v) in self.items() if h.issuperset(hypothesis)])
     
     def __and__(self, mass_function):
         """Shorthand for 'combine_conjunctive(mass_function)'."""
@@ -325,12 +326,6 @@ class MassFunction(dict):
                     combined = combined._combine_importance_sampling(m, sample_count)
                 else:
                     combined = combined._combine_direct_sampling(m, rule, sample_count)
-#        if not isinstance(mass_function, MassFunction):
-#            f = partial(MassFunction._combine, rule=rule, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling)
-#            return reduce(f, [self] + mass_function)
-        
-#        if not self or not mass_function:
-#            return MassFunction()
         if normalization:
             return combined.normalize()
         else:
@@ -341,9 +336,7 @@ class MassFunction(dict):
         combined = MassFunction()
         for h1, v1 in self.items():
             for h2, v2 in mass_function.items():
-                h_new = rule(h1, h2)
-                if h_new:
-                    combined[h_new] += v1 * v2
+                combined[rule(h1, h2)] += v1 * v2
         return combined
     
     def _combine_direct_sampling(self, mass_function, rule, sample_count):
@@ -352,9 +345,7 @@ class MassFunction(dict):
         samples1 = self.sample(sample_count)
         samples2 = mass_function.sample(sample_count)
         for i in range(sample_count):
-            s = rule(samples1[i], samples2[i])
-            if s:
-                combined[s] += 1.0 / sample_count
+            combined[rule(samples1[i], samples2[i])] += 1.0 / sample_count
         return combined
     
     def _combine_importance_sampling(self, mass_function, sample_count):
@@ -366,29 +357,32 @@ class MassFunction(dict):
                 combined[s2] += weight
         return combined
     
-    def combine_gbt(self, likelihoods, sample_count=None, importance_sampling=True):
+    def combine_gbt(self, likelihoods, *, normalization=True, sample_count=None, importance_sampling=True):
         """
-        Conjunctively combines this mass function with a mass function obtained from a list of likelihoods via the generalized Bayesian theorem.
+        Conjunctively combines the mass function with a mass function obtained from a sequence of
+        likelihoods via the generalized Bayesian theorem and returns the combination as a new mass function.
         
-        Arguments:
-        mass_function -- A mass function defined over the same frame of discernment.
-        sample_count -- The number of samples used for a Monte-Carlo combination. Monte-Carlo is used if sample_count is set to a value different than 'None'.
-        sample_method -- The type of Monte-Carlo combination. (Ignored of sample_count is not set.)
-            'direct' (default): Independently generate samples from both mass functions and intersect them. Appropriate if the evidential conflict is limited.
-            'importance': Sample the second mass function by conditioning it with the samples of the first and use importance re-sampling.
-            This method is slower but yields a better approximation of there is significant evidential conflict.
+        Equivalent to 'combine_conjunctive(MassFunction.gbt(likelihoods))'.
+        By ignoring incompatible likelihoods, it is generally faster than the former
+        method and yields a better Monte-Carlo approximation in case of normalization.
         
-        TODO
-        Returns:
-        The normalized conjunctively combined mass function according to Dempster's combination rule.
+        'likelihoods' specifies the conditional plausibilities for a set of singleton hypotheses.
+        It can either be a dictionary mapping singleton hypotheses to plausibilities or an iterable
+        containing tuples consisting of a singleton hypothesis and a corresponding plausibility value.
+        
+        All arguments except for 'likelihoods' must be specified as keyword arguments.
+        'normalization' determines whether the resulting mass function is normalized, i.e., whether m({}) == 0.
+        If 'sample_count' is not None, the true mass function is approximated using the specified number of samples.
+        See 'combine_conjunctive' for details on the effect of setting 'importance_sampling'.
         """
-        combined = MassFunction()
-        # restrict to generally compatible likelihoods
-        frame = self.frame()
-        likelihoods = [l for l in likelihoods if l[1] > 0 and l[0] in frame]
-        if sample_count == None:    # deterministic
-            return self.combine_conjunctive(MassFunction.gbt(likelihoods))
-        else:   # Monte-Carlo
+        core = self.core() # restrict to generally compatible likelihoods
+        likelihoods = [l for l in likelihoods if l[1] > 0 and l[0] in core]
+        if sample_count == None: # deterministic
+            return self.combine_conjunctive(MassFunction.gbt(likelihoods), normalization=normalization)
+        else: # Monte-Carlo
+            if not normalization: # only use importance sampling in case of normalization
+                importance_sampling = False
+            combined = MassFunction()
             for s, n in self.sample(sample_count, as_dict=True).items():
                 if importance_sampling:
                     compatible_likelihoods = [l for l in likelihoods if l[0] in s]
@@ -397,14 +391,15 @@ class MassFunction(dict):
                     compatible_likelihoods = likelihoods
                 if not compatible_likelihoods:
                     continue
-                empty_mass = reduce(mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
+                if normalization:
+                    empty_mass = reduce(mul, [1.0 - l[1] for l in compatible_likelihoods], 1.0)
                 for _ in range(n):
                     rv = [random() for _ in range(len(compatible_likelihoods))]
                     subtree_mass = 1.0
                     hyp = set()
                     for k in range(len(compatible_likelihoods)):
                         l = compatible_likelihoods[k][1]
-                        norm = 1.0 if hyp else 1.0 - empty_mass / subtree_mass
+                        norm = 1.0 if hyp or not normalization else 1.0 - empty_mass / subtree_mass
                         if l / norm > rv[k]:
                             hyp.add(compatible_likelihoods[k][0])
                         else:
@@ -412,20 +407,22 @@ class MassFunction(dict):
                     if importance_sampling:
                         combined[hyp] += weight
                     else:
-                        hyp &= s
-                        if hyp:
-                            combined[hyp] += 1.0
-            return combined.normalize()
+                        combined[hyp & s] += 1.0
+            if normalization:
+                return combined.normalize()
+            else:
+                return combined
     
-    def condition(self, hypothesis, normalization=True):
+    def condition(self, hypothesis, *, normalization=True):
         """
-        Conditions the mass function with 'hypothesis' according to Dempster's rule of conditioning.
+        Conditions the mass function with 'hypothesis'.
         
-        'normalization' determines whether the resulting conjunctive combination is normalized.
+        'normalization' determines whether the resulting conjunctive combination is normalized (must be specified as a keyword argument).
         
         Shorthand for self.combine_conjunctive(MassFunction({hypothesis:1.0}), normalization).
         """
-        return self.combine_conjunctive(MassFunction({hypothesis:1.0}), normalization=normalization)
+        m = MassFunction({MassFunction._convert(hypothesis):1.0})
+        return self.combine_conjunctive(m, normalization=normalization)
     
     def conflict(self, mass_function):
         """
@@ -446,15 +443,28 @@ class MassFunction(dict):
     
     def normalize(self):
         """
-        Normalizes the mass function in-place such that the sum of all mass values equals 1.
+        Normalizes the mass function in-place.
         
-        It does not set the mass value of the empty set to 0 and only asserts that the mass values sum to 1.
+        It sets the mass value of the empty set to 0 and scales all other values such that their sum equals 1.
         For convenience, the method returns 'self'.
         """
-        mass_sum = sum(self.values())
+        if frozenset() in self:
+            del self[frozenset()]
+        mass_sum = fsum(self.values())
         if mass_sum != 1.0:
-            for h, v in self.items():
+            for (h, v) in self.items():
                 self[h] = v / mass_sum
+        return self
+    
+    def prune(self):
+        """
+        Removes all non-focal (0 mass) hypotheses.
+        
+        For convenience, the method returns 'self'.
+        """ 
+        remove = [h for (h, v) in self.items() if v == 0.0]
+        for h in remove:
+            del self[h]
         return self
     
     def markov_update(self, transition_model, sample_count=None):
@@ -496,7 +506,7 @@ class MassFunction(dict):
         
         """
         extended = MassFunction()
-        for h, v in self.items():
+        for (h, v) in self.items():
             extended[frozenset(product(*(spaces[:index] + [h] + spaces[index:])))] = v
         return extended
     
@@ -508,14 +518,14 @@ class MassFunction(dict):
         'dimensions' is a set of indices determining the dimensions to be preserved.
         """
         projected = MassFunction()
-        for h, v in self.items():
+        for (h, v) in self.items():
             projected[[s[d] for s in h for d in dimensions]] += v
         return projected
     
     def pignistic(self):
         """Computes the pignistic transformation and returns a mass function consisting only of singletons."""
         p = MassFunction()
-        for h, v in self.items():
+        for (h, v) in self.items():
             for s in h:
                 p[(s,)] += v / len(h)
         return p
@@ -527,7 +537,7 @@ class MassFunction(dict):
         See 
         """
         c = 0.0
-        for h, v in self.items():
+        for (h, v) in self.items():
             c += v * log(len(h) / v, 2)
         return c
     
@@ -535,8 +545,8 @@ class MassFunction(dict):
         """Evidential distance between two mass functions according to Jousselme et al. "A new distance between two bodies of evidence". Information Fusion, 2001."""
         def sp(m1, m2, cache):
             p = 0
-            for h1, v1 in m1.items():
-                for h2, v2 in m2.items():
+            for (h1, v1) in m1.items():
+                for (h2, v2) in m2.items():
                     if (h1, h2) in cache:
                         p += cache[(h1, h2)] * v1 * v2
                     else:
@@ -556,24 +566,11 @@ class MassFunction(dict):
         
         Both mass functions are treated as vectors of mass values.
         """
-        d = sum([(v - m[h])**p for h, v in self.items()])
-        for h, v in m.items():
+        d = fsum([(v - m[h])**p for (h, v) in self.items()])
+        for (h, v) in m.items():
             if h not in self:
                 d += v**p
         return d**(1.0 / p)
-    
-    def prune(self, max_mass=0.0):
-        """
-        Removes all hypotheses whose mass value is less than or equal to 'max_mass'.
-        
-        By default (max_mass=0.0), only non-focal hypotheses are removed.
-        Afterwards, the mass function is normalized.
-        For convenience, the method returns 'self'.
-        """ 
-        remove = [h for h, v in self.items() if v <= max_mass]
-        for h in remove:
-            del self[h]
-        return self.normalize()
     
     def is_normalized(self, epsilon=0.0):
         """
@@ -582,7 +579,7 @@ class MassFunction(dict):
         'epsilon' specifies the tolerance interval and defaults to 0.
         Note that this method only checks the total amount of assigned mass including the mass corresponding to the empty set.
         """
-        return abs(sum(self.values()) - 1.0) <= epsilon
+        return abs(fsum(self.values()) - 1.0) <= epsilon
     
     def is_compatible(self, m):
         """
@@ -591,7 +588,7 @@ class MassFunction(dict):
         Compatibility means that the mass value of each hypothesis in 'm' is less than
         or equal to the corresponding plausibility given by this mass function.
         """
-        return all([self.pl(h) >= v for h, v in m.items()])
+        return all([self.pl(h) >= v for (h, v) in m.items()])
     
     def sample(self, n, maximum_likelihood=True, as_dict=False):
         """
@@ -609,11 +606,11 @@ class MassFunction(dict):
         if not isinstance(n, int):
             raise TypeError("n must be int")
         samples = dict() if as_dict else []
-        mass_sum = sum(self.values())
+        mass_sum = fsum(self.values())
         if maximum_likelihood:
             remainders = []
             remaining_sample_count = n
-            for h, v in self.items():
+            for (h, v) in self.items():
                 fraction = n * v / mass_sum
                 quotient = int(fraction)
                 if quotient > 0:
@@ -637,7 +634,7 @@ class MassFunction(dict):
             hypotheses = sorted(self.items(), reverse=True, key=lambda hv: hv[1])
             for i in range(n):
                 mass = 0.0
-                for h, v in hypotheses:
+                for (h, v) in hypotheses:
                     mass += v
                     if mass >= rv[i]:
                         if as_dict:
@@ -663,27 +660,25 @@ class MassFunction(dict):
     def sample_probability_distributions(self, n):
         samples = [MassFunction() for _ in range(n)]
         for i in range(n):
-            for h, v in self.items():
+            for (h, v) in self.items():
                 if len(h) == 1:
                     samples[i][h] += v
                 else:
                     rv = [random() for _ in range(len(h))]
-                    total = sum(rv)
+                    total = fsum(rv)
                     for k, s in enumerate(h):
                         samples[i][{s}] += rv[k] * v / total
         return samples
 
 
-def powerset(set, include_empty=True):
+def powerset(set):
     """
     Returns an iterator over the power set of 'set'.
     
     'set' is an arbitrary iterator over hashable elements.
     All returned subsets are of type 'frozenset'.
-    If include_empty is set to False, the empty set will not be returned.
     """
-    start = 0 if include_empty else 1
-    return map(frozenset, chain.from_iterable(combinations(set, r) for r in range(start, len(set) + 1)))
+    return map(frozenset, chain.from_iterable(combinations(set, r) for r in range(len(set) + 1)))
 
 def gbt_m(hypothesis, likelihoods, normalization=True):
     """
