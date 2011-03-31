@@ -61,7 +61,7 @@ class MassFunction(dict):
             return frozenset(hypothesis)
     
     @staticmethod
-    def gbt(likelihoods, normalization=True, sample_count=None):
+    def gbt(likelihoods, *, normalization=True, sample_count=None):
         """
         Constructs a mass function using the generalized Bayesian theorem.
         For more information, see Smets. 1993. Belief functions: 
