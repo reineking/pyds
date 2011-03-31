@@ -467,14 +467,22 @@ class MassFunction(dict):
             del self[h]
         return self
     
-    # TODO: name
     def markov(self, transition_model, *, sample_count=None):
         """
-        Performs a first-order Markov prediction step using the given transition model.
+        Computes the mass function induced by a prior belief (self) and a transition model.
         
-        This mass function expresses the belief about the current state and the transition model describes the state transition belief.
-        The transition model is a function that takes a singleton state as input and returns possible successor states either as a MassFunction
-        or as a single randomly-sampled state set.
+        The transition model expresses a joint belief over the frame of this mass function and a new frame.
+        The belief over the frame of this mass function is implicitly assumed to be vacuous.
+        The transition model is a function returning the conditional belief over the new frame (as a mass function
+        if sample_count=None) while taking a singleton hypothesis of the current frame as input.
+        The disjunctive rule of combination is then used to construct the mass function over the new frame.
+        
+        If 'sample_count' is not None, the true mass function is approximated using the specified number of samples.
+        In this case, 'transition_model' is expected to take a second argument stating how many samples from the corresponding conditional mass function should be returned.
+        The return value in this case is expected to be an iterable over sampled hypotheses from the new frame.
+         
+        This method can be used to implement the prediction step for estimation in a hidden Markov process (hence the name).
+        Under this interpretation, the transition model expresses the mass distribution over successor states given the current state.
         """
         updated = MassFunction()
         if sample_count == None: # deterministic
