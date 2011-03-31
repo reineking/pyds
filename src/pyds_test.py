@@ -136,15 +136,21 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(0.1, m3_un[{'a', 'b'}])
     
     def test_combine_conjunctive(self):
-        empty = 0.45
-        def test(m, places):
-            self.assertAlmostEqual(0.15 / (1.0 - empty), m[('a',)], places)
-            self.assertAlmostEqual(0.25 / (1.0 - empty), m[('b',)], places)
-            self.assertAlmostEqual(0.06 / (1.0 - empty), m[('c',)], places)
-            self.assertAlmostEqual(0.09 / (1.0 - empty), m[('a', 'c')], places)
-        test(self.m1 & self.m2, 10)
-        test(self.m1.combine_conjunctive(self.m2, sample_count=10000), 1)
-        test(self.m1.combine_conjunctive(self.m2, sample_count=1000, importance_sampling=True), 12)
+        def test(m, empty_mass, places=10):
+            self.assertAlmostEqual(empty_mass, m[set()], places)
+            norm = 0.55 + empty_mass
+            self.assertAlmostEqual(0.15 / norm, m[{'a'}], places)
+            self.assertAlmostEqual(0.25 / norm, m[{'b'}], places)
+            self.assertAlmostEqual(0.06 / norm, m[{'c'}], places)
+            self.assertAlmostEqual(0.09 / norm, m[{'a', 'c'}], places)
+        # normalized
+        test(self.m1 & self.m2, 0.0)
+        test(self.m1.combine_conjunctive(self.m2, sample_count=10000), 0.0, 1)
+        test(self.m1.combine_conjunctive(self.m2, sample_count=1000, importance_sampling=True), 0.0)
+        # unnormalized
+        test(self.m1.combine_conjunctive(self.m2, normalization=False), 0.45)
+        test(self.m1.combine_conjunctive(self.m2, normalization=False, sample_count=10000), 0.45, 2)
+        test(self.m1.combine_conjunctive(self.m2, normalization=False, sample_count=1000, importance_sampling=True), 0.45, 2) # ImpSam should be ignored
         # combine multiple mass functions
         m_single = self.m1.combine_conjunctive(self.m1).combine_conjunctive(self.m2)
         m_multi = self.m1.combine_conjunctive(self.m1, self.m2)
@@ -189,17 +195,15 @@ class PyDSTest(unittest.TestCase):
         self.assertAlmostEqual(0.2, md12[(('a', 1),)])
         self.assertAlmostEqual(0.8, md12[(('a', 1), ('b', 2))])
     
-    def test_extend(self):
-        extended = self.m2.extend([('x', 'y'), (8, 9)], 1)
-        self.assertAlmostEqual(0.3, extended[tuple(product(('x', 'y'), ('a', 'c'), (8, 9)))])
-    
-    def test_project(self):
-        m = MassFunction([({('a', 'x')}, 0.3), ({('a', 'y'), ('b', 'x')}, 0.7)])
-        self._assert_equal_belief(MassFunction([({'a'}, 0.3), ({'a', 'b'}, 0.7)]), m.project([0]), 8)
-        # test extension + projection
-        projected = self.m2.extend([('x', 'y'), (8, 9)], 1).project([1])
-        for k, v in projected.items():
-            self.assertAlmostEqual(self.m2[k], v)
+    def test_map(self):
+        # vacuous extension
+        frame = {1, 2}
+        extended = self.m3.map(lambda h: product(h, frame))
+        result = MassFunction({():0.4, (('c', 1), ('c', 2)):0.2, (('a', 1), ('a', 2), ('c', 1), ('c', 2)):0.3, (('a', 1), ('a', 2), ('b', 1), ('b', 2)):0.1})
+        self.assertEqual(result, extended)
+        # projection
+        projected = extended.map(lambda h: (t[0] for t in h))
+        self.assertEqual(self.m3, projected)
     
     def test_pignistic(self):
         p = self.m1.pignistic()
@@ -215,14 +219,6 @@ class PyDSTest(unittest.TestCase):
         h = -0.125 * log(0.125, 2) - 0.075 * log(0.075, 2) - 0.275 * log(0.275, 2) - 0.525 * log(0.525, 2)
         self.assertAlmostEqual(h, self.m1.pignistic().local_conflict())
     
-    def test_distance(self):
-        m3 = MassFunction([(('b',), 0.7), (('c',), 0.3)])
-        self.assertEqual(0, m3.distance(m3))
-        self.assertEqual(0, self.m2.distance(self.m2))
-        self.assertEqual(1, MassFunction([(('a',), 1.0)]).distance(MassFunction([(('b',), 1.0)])))
-#        self.assertEqual(sqrt(0.5*(0.3**2+0.7**2+1)), m3.distance(MassFunction([(('x',), 1.0)])))
-#        self.assertEqual(sqrt(0.5*(0.5**2+0.2*0.3+0.3*0.45+1)), self.m2.distance(MassFunction([(('x',), 1.0)])))
-    
     def test_norm(self):
         self.assertEqual(0, self.m1.norm(self.m1))
         self.assertEqual(0, self.m1.norm(self.m1, p = 1))
@@ -236,8 +232,8 @@ class PyDSTest(unittest.TestCase):
     
     def test_sample(self):
         sample_count = 1000
-        samples_ran = self.m1.sample(sample_count, maximum_likelihood=False)
-        samples_ml = self.m1.sample(sample_count, maximum_likelihood=True)
+        samples_ran = self.m1.sample(sample_count, quantization=False)
+        samples_ml = self.m1.sample(sample_count, quantization=True)
         self.assertEqual(sample_count, len(samples_ran))
         self.assertEqual(sample_count, len(samples_ml))
         for h, v in self.m1.items():
@@ -245,7 +241,7 @@ class PyDSTest(unittest.TestCase):
             self.assertAlmostEqual(v, float(samples_ml.count(h)) / sample_count, places=20)
         self.assertEqual(0, len(MassFunction().sample(sample_count)))
     
-    def test_markov_update(self):
+    def test_markov(self):
         def test(m, places):
             self.assertAlmostEqual(0.4 * 0.8, m[(4, 6)], places)
             self.assertAlmostEqual(0.4 * 0.2, m[(5,)], places)
@@ -256,8 +252,8 @@ class PyDSTest(unittest.TestCase):
         m = MassFunction([((0, 1), 0.6), ((5,), 0.4)])
         transition_model = lambda s: MassFunction([((s - 1, s + 1), 0.8), ((s,), 0.2)])
         transition_model_mc = lambda s, n: transition_model(s).sample(n)
-        test(m.markov_update(transition_model), 10)
-        test(m.markov_update(transition_model_mc, 10000), 2)
+        test(m.markov(transition_model), 10)
+        test(m.markov(transition_model_mc, sample_count=10000), 2)
     
     def test_gbt(self):
         def test(m, places):
@@ -305,11 +301,6 @@ class PyDSTest(unittest.TestCase):
             p_correct[(s,)] = l * p_prior[(s,)]
         p_correct.normalize()
         self._assert_equal_belief(p_correct, p_posterior, 10)
-    
-    def test_is_normalized(self):
-        self.assertTrue(self.m1.is_normalized())
-        self.m1['b'] = 0.15
-        self.assertFalse(self.m1.is_normalized())
     
     def test_is_probabilistic(self):
         self.assertFalse(self.m1.is_probabilistic())

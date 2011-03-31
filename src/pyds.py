@@ -20,10 +20,10 @@
 A framework for performing computations in the Dempster-Shafer theory.
 """
 
-from itertools import chain, combinations, product
+from itertools import chain, combinations
 from functools import reduce
 from operator import mul
-from math import log, sqrt, fsum
+from math import log, fsum
 from random import random, shuffle, uniform
 
 
@@ -64,7 +64,7 @@ class MassFunction(dict):
     def gbt(likelihoods, normalization=True, sample_count=None):
         """
         Constructs a mass function using the generalized Bayesian theorem.
-        For more information, see Ph. Smets, 1993. Belief functions: 
+        For more information, see Smets. 1993. Belief functions: 
         The disjunctive rule of combination and the generalized Bayesian theorem. International Journal of Approximate Reasoning. 
         
         'likelihoods' specifies the conditional plausibilities for a set of singleton hypotheses.
@@ -281,7 +281,7 @@ class MassFunction(dict):
     
     def __str__(self):
         hyp = sorted([(v, h) for (h, v) in self.items()], reverse=True)
-        return "{" + ";".join([str(tuple(h)) + ":" + str(v) for (v, h) in hyp]) + "}"
+        return "{" + "; ".join([str(set(h)) + ":" + str(v) for (v, h) in hyp]) + "}"
     
     def combine_conjunctive(self, *mass_functions, normalization=True, sample_count=None, importance_sampling=False):
         """
@@ -322,7 +322,7 @@ class MassFunction(dict):
             if sample_count == None:
                 combined = combined._combine_deterministic(m, rule)
             else:
-                if importance_sampling:
+                if importance_sampling and normalization:
                     combined = combined._combine_importance_sampling(m, sample_count)
                 else:
                     combined = combined._combine_direct_sampling(m, rule, sample_count)
@@ -445,7 +445,7 @@ class MassFunction(dict):
         """
         Normalizes the mass function in-place.
         
-        It sets the mass value of the empty set to 0 and scales all other values such that their sum equals 1.
+        Sets the mass value of the empty set to 0 and scales all other values such that their sum equals 1.
         For convenience, the method returns 'self'.
         """
         if frozenset() in self:
@@ -458,7 +458,7 @@ class MassFunction(dict):
     
     def prune(self):
         """
-        Removes all non-focal (0 mass) hypotheses.
+        Removes all non-focal (0 mass) hypotheses in-place.
         
         For convenience, the method returns 'self'.
         """ 
@@ -467,7 +467,8 @@ class MassFunction(dict):
             del self[h]
         return self
     
-    def markov_update(self, transition_model, sample_count=None):
+    # TODO: name
+    def markov(self, transition_model, *, sample_count=None):
         """
         Performs a first-order Markov prediction step using the given transition model.
         
@@ -476,8 +477,7 @@ class MassFunction(dict):
         or as a single randomly-sampled state set.
         """
         updated = MassFunction()
-        if sample_count == None:
-            # deterministic
+        if sample_count == None: # deterministic
             for k, v in self.items():
                 predicted = None
                 for e in k:
@@ -487,8 +487,7 @@ class MassFunction(dict):
                         predicted |= transition_model(e)
                 for kp, vp in predicted.items():
                     updated[kp] += v * vp
-        else:
-            # Monte-Carlo
+        else: # Monte-Carlo
             for s, n in self.sample(sample_count, as_dict=True).items():
                 unions = [[] for _ in range(n)]
                 for e in s:
@@ -499,31 +498,33 @@ class MassFunction(dict):
                     updated[u] += 1.0 / sample_count
         return updated
     
-    def extend(self, spaces, index):
+    def map(self, function):
         """
-        Extends the mass function vacuously to an additional dimension.
+        Maps each hypothesis to a new hypothesis using 'function' and returns the new mass function.
         
+        'function' is a function taking a hypothesis as its only input and returning a new hypothesis
+        (i.e., a sequence that can be converted to a 'frozenset').
         
+        Here are some example use cases:
+        
+        1. Vacuous extension to a multi-dimensional frame of discernment (m is defined over
+        the frame A while the new mass function is defined over the Cartesian product AxB):
+            
+            B = {'x', 'y', 'z'}
+            m.map(lambda h: itertools.product(h, B))
+        
+        2. Projection to a lower dimensional frame (m is defined over AxBxC such that each hypothesis is
+        a set of tuples where each tuple consists of 3 elements; the new mass function is defined over BxC):
+        
+            m.map(lambda h: (t[1:] for t in h))
         """
-        extended = MassFunction()
+        m = MassFunction()
         for (h, v) in self.items():
-            extended[frozenset(product(*(spaces[:index] + [h] + spaces[index:])))] = v
-        return extended
-    
-    def project(self, dimensions):
-        """
-        Projects a mass function defined over a multi-dimensional frame of discernment to a subset of these dimensions.
-        
-        Existing hypotheses are assumed to be sets of tuples, where each tuple is located in the multi-dimensional space.
-        'dimensions' is a set of indices determining the dimensions to be preserved.
-        """
-        projected = MassFunction()
-        for (h, v) in self.items():
-            projected[[s[d] for s in h for d in dimensions]] += v
-        return projected
+            m[self._convert(function(h))] += v
+        return m
     
     def pignistic(self):
-        """Computes the pignistic transformation and returns a mass function consisting only of singletons."""
+        """Computes the pignistic transformation and returns it as a new mass function consisting only of singletons."""
         p = MassFunction()
         for (h, v) in self.items():
             for s in h:
@@ -534,35 +535,20 @@ class MassFunction(dict):
         """
         Computes the local conflict measure.
         
-        See 
+        For more information, see Pal et al. 1993. Uncertainty measures for evidential reasoning II:
+        A new measure of total uncertainty. International Journal of Approximate Reasoning.
+        
+        In case the mass function is a probability function (containing only singleton hypotheses),
+        it reduces to the classical entropy measure.
         """
         c = 0.0
         for (h, v) in self.items():
             c += v * log(len(h) / v, 2)
         return c
     
-    def distance(self, m):
-        """Evidential distance between two mass functions according to Jousselme et al. "A new distance between two bodies of evidence". Information Fusion, 2001."""
-        def sp(m1, m2, cache):
-            p = 0
-            for (h1, v1) in m1.items():
-                for (h2, v2) in m2.items():
-                    if (h1, h2) in cache:
-                        p += cache[(h1, h2)] * v1 * v2
-                    else:
-                        w = len(h1 & h2)
-                        if w > 0:
-                            w /= float(len(h1 | h2))
-                            p += w * v1 * v2
-                        cache[(h1, h2)] = w
-                        cache[(h2, h1)] = w
-            return p
-        cache = {}
-        return sqrt(0.5 * (sp(self, self, cache) + sp(m, m, cache)) - sp(self, m, cache))
-    
     def norm(self, m, p=2):
         """
-        Computes the p-norm between two mass functions.
+        Computes the p-norm between two mass functions (default is p=2).
         
         Both mass functions are treated as vectors of mass values.
         """
@@ -571,15 +557,6 @@ class MassFunction(dict):
             if h not in self:
                 d += v**p
         return d**(1.0 / p)
-    
-    def is_normalized(self, epsilon=0.0):
-        """
-        Checks whether the mass values sum to 1.
-        
-        'epsilon' specifies the tolerance interval and defaults to 0.
-        Note that this method only checks the total amount of assigned mass including the mass corresponding to the empty set.
-        """
-        return abs(fsum(self.values()) - 1.0) <= epsilon
     
     def is_compatible(self, m):
         """
@@ -590,24 +567,25 @@ class MassFunction(dict):
         """
         return all([self.pl(h) >= v for (h, v) in m.items()])
     
-    def sample(self, n, maximum_likelihood=True, as_dict=False):
+    def sample(self, n, *, quantization=True, as_dict=False):
         """
-        TODO update
-        Generates a list of n samples from this distribution.
+        Returns n random samples from the mass distribution.
         
-        Arguments:
-        n -- The number of samples.
-        as_dict -- Return the samples as a list (False) or as a dictionary of samples and their frequencies (True). 
+        Hypotheses are drawn with a probability proportional to their mass values (with replacement).
+         
+        If 'quantization' is True (default), the method performs a quantization of the mass values.
+        This means the frequency of a hypothesis h in the sample set is at least int(self[h] * n / t) where t is the sum of all mass values.
+        The remaining sample slots (if any) are filled up according to the remainders of the fractions computed in the first step.
         
-        Returns:
-        Either a list of hypothesis drawn (with replacement) from the distribution with probability proportional to their mass values
-        or a dictionary containing the drawn hypotheses and their frequencies.
+        The parameter 'as_dict' determines the type of the returned value.
+        If 'as_dict' is False (default), a list of length n is returned.
+        Otherwise, the result is a dictionary specifying the number of samples for each hypothesis.
         """
         if not isinstance(n, int):
             raise TypeError("n must be int")
         samples = dict() if as_dict else []
         mass_sum = fsum(self.values())
-        if maximum_likelihood:
+        if quantization:
             remainders = []
             remaining_sample_count = n
             for (h, v) in self.items():
@@ -653,11 +631,17 @@ class MassFunction(dict):
         """
         Checks whether the mass function is a probability function.
         
-        Returns true if and only if all hypotheses are singletons (normalization is ignored). 
+        Returns True if and only if all hypotheses are singletons (normalization is ignored). 
         """
         return all([len(h) == 1 for h in self.keys()])
     
     def sample_probability_distributions(self, n):
+        """
+        Randomly generates n compatible probability distributions from the mass function.
+        
+        The result is a list of n independently sampled probability distributions expressed as mass functions.
+        This can be useful for estimating various statistical measures like the minimum or maximum entropy consistent with the mass distribution.
+        """
         samples = [MassFunction() for _ in range(n)]
         for i in range(n):
             for (h, v) in self.items():
