@@ -278,9 +278,9 @@ class PyDSTest(unittest.TestCase):
             self.assertAlmostEqual(0.7 * 0.8 / (1 - 0.7 * 0.2), m[('b',)], places)
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0)]
         test(MassFunction.gbt(pl), 10)
-        test(MassFunction.gbt(pl, 10000), 2)
+        test(MassFunction.gbt(pl, sample_count=10000), 2)
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
-        self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, 10000), 2)
+        self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, sample_count=10000), 2)
     
     def test_frame(self):
         self.assertEqual({'a', 'b', 'c', 'd'}, self.m1.frame())
