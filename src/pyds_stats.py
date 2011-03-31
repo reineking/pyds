@@ -30,7 +30,7 @@ from pyds import MassFunction
 import numpy
 
 
-iterations = 10
+iterations = 100
 
 
 def stats(results):
@@ -180,16 +180,16 @@ def error_combine_gbt_1000_imp():
 def run_measures(prefix):
     mod = sys.modules[__name__]
     filt = lambda x: inspect.isfunction(x) and inspect.getmodule(x) == mod and x.__name__.startswith(prefix + '_')
-    print('%-32s%-7s (%4s)' % ('function', 'mean', 'stddev'))
+    print('%-32s%-6s (%4s)' % ('function', 'mean', 'stddev'))
     print('-' * 50)
     for f in sorted(filter(filt, globals().copy().values()), key=str):
         random.seed(0)
-        print('%-32s%.4fs (+-%.4f)' % ((f.__name__[len(prefix) + 1:],) + f()))
+        print('%-32s%.4f (+-%.4f)' % ((f.__name__[len(prefix) + 1:],) + f()))
 
 
 if __name__ == '__main__':
-    print('computation time:')
+    print('computation time (seconds):')
     run_measures('time')
     print('\n')
-    print('approximation error:')
+    print('approximation error (Euclidean distance):')
     run_measures('error')
