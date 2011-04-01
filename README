@@ -1,0 +1,9 @@
+A Python library for performing calculations in the Dempster-Shafer theory of evidence.
+
+Features:
+Support for normalized as well as unnormalized belief functions (Transferable Belief Model)
+Different Monte-Carlo algorithms for combining belief functions
+
+Requires Python 3.0 or higher.
+
+See examples.py for how to use it.
