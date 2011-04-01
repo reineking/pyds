@@ -76,6 +76,8 @@ class MassFunction(dict):
         If 'sample_count' is not None, the true mass function is approximated using the specified number of samples.
         """
         m = MassFunction()
+        if isinstance(likelihoods, dict):
+            likelihoods = list(likelihoods.items())
         # filter trivial likelihoods 0 and 1
         ones = [h for (h, l) in likelihoods if l >= 1.0]
         likelihoods = [(h, l) for (h, l) in likelihoods if 0.0 < l < 1.0]
@@ -382,6 +384,8 @@ class MassFunction(dict):
         See 'combine_conjunctive' for details on the effect of setting 'importance_sampling'.
         """
         core = self.core() # restrict to generally compatible likelihoods
+        if isinstance(likelihoods, dict):
+            likelihoods = list(likelihoods.items())
         likelihoods = [l for l in likelihoods if l[1] > 0 and l[0] in core]
         if sample_count == None: # deterministic
             return self.combine_conjunctive(MassFunction.gbt(likelihoods), normalization=normalization)
@@ -689,6 +693,8 @@ def gbt_m(hypothesis, likelihoods, normalization=True):
     
     Equivalent to MassFunction.gbt(likelihoods, normalization)[hypothesis].
     """
+    if isinstance(likelihoods, dict):
+        likelihoods = list(likelihoods.items())
     q = gbt_q(hypothesis, likelihoods, normalization)
     return q * reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
 
@@ -698,6 +704,8 @@ def gbt_bel(hypothesis, likelihoods, normalization=True):
     
     Equivalent to MassFunction.gbt(likelihoods, normalization).bel(hypothesis).
     """
+    if isinstance(likelihoods, dict):
+        likelihoods = list(likelihoods.items())
     eta = _gbt_normalization(likelihoods) if normalization else 1.0
     exc = reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
     all = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
@@ -709,6 +717,8 @@ def gbt_pl(hypothesis, likelihoods, normalization=True):
     
     Equivalent to MassFunction.gbt(likelihoods, normalization).pl(hypothesis).
     """
+    if isinstance(likelihoods, dict):
+        likelihoods = list(likelihoods.items())
     eta = _gbt_normalization(likelihoods) if normalization else 1.0
     return eta * (1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] in hypothesis], 1.0))
     
@@ -718,6 +728,8 @@ def gbt_q(hypothesis, likelihoods, normalization=True):
     
     Equivalent to MassFunction.gbt(likelihoods, normalization).q(hypothesis).
     """
+    if isinstance(likelihoods, dict):
+        likelihoods = list(likelihoods.items())
     eta = _gbt_normalization(likelihoods) if normalization else 1.0
     return eta * reduce(mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0)
 
