@@ -25,12 +25,12 @@ from itertools import product
 
 
 print('=== creating mass functions ===')
-m1 = MassFunction({('a', 'b'):0.6, ('b', 'c'):0.3, ('a',):0.1, ('a', 'd'):0.0}) # using a dictionary
+m1 = MassFunction({'ab':0.6, 'bc':0.3, 'a':0.1, 'ad':0.0}) # using a dictionary
 print('m_1 =', m1)
 m2 = MassFunction([({'a', 'b', 'c'}, 0.2), ({'a', 'c'}, 0.5), ({'c'}, 0.3)]) # using a list of tuples
 print('m_2 =', m2)
 m3 = MassFunction()
-m3[{'b', 'c'}] = 0.8
+m3['bc'] = 0.8
 m3[{}] = 0.2
 print('m_3 =', m3, ('(unnormalized mass function)'))
 
