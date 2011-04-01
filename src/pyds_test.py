@@ -21,7 +21,7 @@ Unit tests for "pyds.py".
 """
 
 import unittest
-from math import log
+from math import log, isnan
 from itertools import product
 from pyds import MassFunction, powerset, gbt_m, gbt_bel, gbt_pl, gbt_q
 import random
@@ -36,7 +36,7 @@ class PyDSTest(unittest.TestCase):
         random.seed(0) # make tests deterministic
     
     def _assert_equal_belief(self, m1, m2, places):
-        for h in m1.frame() | m2.frame():
+        for h in m1.focal() | m2.focal():
             self.assertAlmostEqual(m1[h], m2[h], places)
     
     def test_init(self):
@@ -193,6 +193,7 @@ class PyDSTest(unittest.TestCase):
     
     def test_conflict(self):
         self.assertEqual(-log(0.55, 2), self.m1.conflict(self.m2));
+        self.assertAlmostEqual(-log(0.55, 2), self.m1.conflict(self.m2, sample_count=1000), 1);
         self.assertEqual(float('inf'), self.m1.conflict(MassFunction({'e': 1})));
     
     def test_normalize(self):
@@ -222,15 +223,20 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(self.m3, projected)
     
     def test_pignistic(self):
-        p = self.m1.pignistic()
-        self.assertEqual(0.525, p[('a',)])
-        self.assertEqual(0.275, p[('b',)])
-        self.assertEqual(0.075, p[('c',)])
-        self.assertEqual(0.125, p[('d',)])
+        p1 = self.m1.pignistic()
+        self.assertEqual(0.525, p1[{'a'}])
+        self.assertEqual(0.275, p1[{'b'}])
+        self.assertEqual(0.075, p1[{'c'}])
+        self.assertEqual(0.125, p1[{'d'}])
+        p3 = self.m3.pignistic()
+        self.assertEqual(0.2 / 0.6, p3[{'a'}])
+        self.assertEqual(0.05 / 0.6, p3[{'b'}])
+        self.assertEqual(0.35 / 0.6, p3[{'c'}])
     
     def test_local_conflict(self):
         c = 0.5 * log(1 / 0.5, 2) + 0.2 * log(1 / 0.2, 2) + 0.3 * log(2 / 0.3, 2)
         self.assertEqual(c, self.m2.local_conflict())
+        self.assertTrue(isnan(self.m3.local_conflict()))
         # pignistic entropy
         h = -0.125 * log(0.125, 2) - 0.075 * log(0.075, 2) - 0.275 * log(0.275, 2) - 0.525 * log(0.525, 2)
         self.assertAlmostEqual(h, self.m1.pignistic().local_conflict())

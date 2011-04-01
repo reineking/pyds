@@ -121,6 +121,9 @@ class MassFunction(dict):
             v = fsum([bel[h2] * (-1)**(len(h1 - h2)) for h2 in powerset(h1)])
             if v > 0:
                 m[h1] = v
+        mass_sum = fsum(m.values())
+        if mass_sum < 1.0:
+            m[frozenset()] = 1.0 - mass_sum
         return m
     
     @staticmethod
@@ -148,6 +151,9 @@ class MassFunction(dict):
             v = fsum([q[h1 | h2] * (-1)**(len(h2 - h1)) for h2 in powerset(frame - h1)])
             if v > 0:
                 m[h1] = v
+        mass_sum = fsum(m.values())
+        if mass_sum < 1.0:
+            m[frozenset()] = 1.0 - mass_sum
         return m
     
     def __missing__(self, key):
@@ -334,8 +340,8 @@ class MassFunction(dict):
     def _combine_deterministic(self, mass_function, rule):
         """Helper method for deterministically combining two mass functions."""
         combined = MassFunction()
-        for h1, v1 in self.items():
-            for h2, v2 in mass_function.items():
+        for (h1, v1) in self.items():
+            for (h2, v2) in mass_function.items():
                 combined[rule(h1, h2)] += v1 * v2
         return combined
     
@@ -351,7 +357,7 @@ class MassFunction(dict):
     def _combine_importance_sampling(self, mass_function, sample_count):
         """Helper method for approximatively combining two mass functions using importance sampling."""
         combined = MassFunction()
-        for s1, n in self.sample(sample_count, as_dict=True).items():
+        for (s1, n) in self.sample(sample_count, as_dict=True).items():
             weight = mass_function.pl(s1)
             for s2 in mass_function.condition(s1).sample(n):
                 combined[s2] += weight
@@ -424,19 +430,16 @@ class MassFunction(dict):
         m = MassFunction({MassFunction._convert(hypothesis):1.0})
         return self.combine_conjunctive(m, normalization=normalization)
     
-    def conflict(self, mass_function):
+    def conflict(self, *mass_functions, sample_count=None):
         """
-        Calculates the weight of conflict between two mass functions.
+        Calculates the weight of conflict between two or more mass functions.
         
         The weight of conflict is computed as the (natural) logarithm of the normalization constant in Dempster's rule of combination.
         Returns infinity in case the mass functions are flatly contradicting.
-        """ 
-        c = 0.0
-        for h1, v1 in self.items():
-            for h2, v2 in mass_function.items():
-                if not h1 & h2:
-                    c += v1 * v2
-        if c >= 1:
+        """
+        # compute full conjunctive combination (could be more efficient)
+        c = self.combine_conjunctive(*mass_functions, normalization=False, sample_count=sample_count)[frozenset()]
+        if c >= 1.0:
             return float("inf")
         else:
             return -log(1.0 - c, 2)
@@ -535,9 +538,11 @@ class MassFunction(dict):
         """Computes the pignistic transformation and returns it as a new mass function consisting only of singletons."""
         p = MassFunction()
         for (h, v) in self.items():
-            for s in h:
-                p[(s,)] += v / len(h)
-        return p
+            if v > 0.0:
+                size = float(len(h))
+                for s in h:
+                    p[(s,)] += v / size
+        return p.normalize()
     
     def local_conflict(self):
         """
@@ -546,12 +551,18 @@ class MassFunction(dict):
         For more information, see Pal et al. 1993. Uncertainty measures for evidential reasoning II:
         A new measure of total uncertainty. International Journal of Approximate Reasoning.
         
+        Only works for normalized mass functions.
+        If the mass function is unnormalized, the method returns float('nan')
+        
         In case the mass function is a probability function (containing only singleton hypotheses),
         it reduces to the classical entropy measure.
         """
+        if self[frozenset()] > 0.0:
+            return float('nan')
         c = 0.0
         for (h, v) in self.items():
-            c += v * log(len(h) / v, 2)
+            if v > 0.0:
+                c += v * log(len(h) / v, 2)
         return c
     
     def norm(self, m, p=2):
