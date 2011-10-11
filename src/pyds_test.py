@@ -302,6 +302,9 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual({'a', 'b', 'c'}, self.m2.frame())
         self.assertEqual(set(), MassFunction().frame())
     
+    def test_singletons(self):
+        self.assertSetEqual({frozenset('a'), frozenset('b'), frozenset('c'), frozenset('d')}, self.m1.singletons())
+    
     def test_focal(self):
         self.assertEqual(4, len(list(self.m1.focal())))
         for f in self.m1.focal():

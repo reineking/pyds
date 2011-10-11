@@ -204,6 +204,15 @@ class MassFunction(dict):
         else:
             return frozenset.union(*self.keys())
     
+    def singletons(self):
+        """
+        Returns the set of all singleton hypotheses.
+        
+        Like 'frame()', except that each singleton is wrapped in a frozenset
+        and can thus be directly passed to methods like 'bel()'.
+        """
+        return {frozenset((s,)) for s in self.frame()}
+    
     def focal(self):
         """
         Returns the set of all focal hypotheses.
