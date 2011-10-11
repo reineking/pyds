@@ -625,7 +625,7 @@ class MassFunction(dict):
         """
         if not isinstance(n, int):
             raise TypeError("n must be int")
-        samples = dict() if as_dict else []
+        samples = {h:0 for h in self.keys()} if as_dict else []
         mass_sum = fsum(self.values())
         if quantization:
             remainders = []
@@ -643,10 +643,7 @@ class MassFunction(dict):
             remainders.sort(reverse=True, key=lambda hv: hv[1])
             for h, _ in remainders[:remaining_sample_count]:
                 if as_dict:
-                    if h in samples:
-                        samples[h] += 1
-                    else:
-                        samples[h] = 1
+                    samples[h] += 1
                 else:
                     samples.append(h)
         else:
@@ -658,10 +655,7 @@ class MassFunction(dict):
                     mass += v
                     if mass >= rv[i]:
                         if as_dict:
-                            if h in samples:
-                                samples[h] += 1
-                            else:
-                                samples[h] = 1
+                            samples[h] += 1
                         else:
                             samples.append(h)
                         break
