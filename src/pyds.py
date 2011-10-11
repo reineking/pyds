@@ -689,6 +689,33 @@ class MassFunction(dict):
                     for k, s in enumerate(h):
                         samples[i][{s}] += rv[k] * v / total
         return samples
+    
+    def max_bel(self):
+        """
+        Returns the singleton with the highest belief.
+        
+        In case there are multiple singletons with maximum belief, only one of them is returned.
+        Returns None, if the mass function does not contain any hypotheses.
+        """
+        return self._max_singleton(self.bel)
+    
+    def max_pl(self):
+        """
+        Returns the singleton with the highest plausibility.
+        
+        In case there are multiple singletons with maximum plausibility, only one of them is returned.
+        Returns None, if the mass function does not contain any hypotheses.
+        """
+        return self._max_singleton(self.pl)
+    
+    def _max_singleton(self, f):
+        st = self.singletons()
+        if st:
+            list = [(f(s), s) for s in st]
+            shuffle(list)
+            return max(list)[1]
+        else:
+            return None
 
 
 def powerset(set):

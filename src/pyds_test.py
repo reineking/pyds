@@ -320,7 +320,17 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(set(), MassFunction().core())
         # test combined core
         self.assertEqual({'a', 'b'}, self.m1.core(self.m2))
-        
+    
+    def test_max_bel(self):
+        self.assertEqual(frozenset('a'), self.m1.max_bel())
+        self.assertEqual(frozenset('c'), self.m3.max_bel())
+        self.assertTrue(MassFunction({('ab'):1}).max_bel() in {frozenset('a'), frozenset('b')})
+    
+    def test_max_pl(self):
+        self.assertEqual(frozenset('a'), self.m1.max_pl())
+        self.assertEqual(frozenset('c'), self.m3.max_pl())
+        self.assertTrue(MassFunction({('ab'):0.8, 'c':0.2}).max_pl() in {frozenset('a'), frozenset('b')})
+    
     def test_combine_gbt(self):
         pl = [('b', 0.8), ('c', 0.5)]
         correct = self.m1.combine_conjunctive(MassFunction.gbt(pl))
