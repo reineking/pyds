@@ -35,7 +35,7 @@ class PyDSTest(unittest.TestCase):
         self.m3 = MassFunction({():0.4, 'c':0.2, 'ac':0.3, 'ab':0.1}) # unnormalized mass function
         random.seed(0) # make tests deterministic
     
-    def _assert_equal_belief(self, m1, m2, places):
+    def _assert_equal_belief(self, m1, m2, places=8):
         for h in m1.focal() | m2.focal():
             self.assertAlmostEqual(m1[h], m2[h], places)
     
@@ -355,6 +355,62 @@ class PyDSTest(unittest.TestCase):
     def test_sample_probability_distributions(self):
         for p in self.m1.sample_probability_distributions(100):
             self.assertTrue(self.m1.is_compatible(p))
+    
+    def test_to_array_index(self):
+        self.assertEqual(0, MassFunction._to_array_index((), ('a', 'b', 'c')))
+        self.assertEqual(1, MassFunction._to_array_index(('a',), ('a', 'b', 'c')))
+        self.assertEqual(2, MassFunction._to_array_index(('b',), ('a', 'b', 'c')))
+        self.assertEqual(4, MassFunction._to_array_index(('c',), ('a', 'b', 'c')))
+        self.assertEqual(7, MassFunction._to_array_index(('a', 'b', 'c'), ('a', 'b', 'c')))
+    
+    def test_from_array_index(self):
+        self.assertEqual(frozenset(), MassFunction._from_array_index(0, ('a', 'b', 'c')))
+        self.assertEqual(frozenset(('a',)), MassFunction._from_array_index(1, ('a', 'b', 'c')))
+        self.assertEqual(frozenset(('b',)), MassFunction._from_array_index(2, ('a', 'b', 'c')))
+        self.assertEqual(frozenset(('c',)), MassFunction._from_array_index(4, ('a', 'b', 'c')))
+        self.assertEqual(frozenset(('a', 'b', 'c')), MassFunction._from_array_index(7, ('a', 'b', 'c')))
+    
+    def test_to_array(self):
+        self.assertListEqual([0, 0, 0.2, 0.3, 0.5, 0, 0, 0], list(self.m2.to_array()))
+    
+    def test_from_array(self):
+        self._assert_equal_belief(self.m1, MassFunction.from_array(self.m1.to_array(), self.m1.frame()))
+    
+    def test_confidence_intervals(self):
+        """
+        Numbers taken from:
+        W.L. May, W.D. Johnson, A SAS macro for constructing simultaneous confidence intervals for multinomial proportions,
+        Computer methods and Programs in Biomedicine 53 (1997) 153–162.
+        """
+        hist = {1:91, 2:49, 3:37, 4:43}
+        lower, upper = MassFunction._confidence_intervals(hist, 0.05)
+        self.assertAlmostEqual(0.33, lower[1], places=2)
+        self.assertAlmostEqual(0.16, lower[2], places=2)
+        self.assertAlmostEqual(0.11, lower[3], places=2)
+        self.assertAlmostEqual(0.14, lower[4], places=2)
+        for h, p_u in upper.items():
+            p = hist[h] / sum(hist.values())
+            self.assertAlmostEqual(2 * p - lower[h], p_u, places=1)
+    
+    def test_from_samples(self):
+        precipitation_data = {1:48, 2:17, 3:19, 4:11, 5:6, 6:9}
+        # ordered
+        m = MassFunction.from_samples(precipitation_data, 0.05, mode='ordered')
+        self.assertAlmostEqual(0.32,  m[(1,)], 2)
+        self.assertAlmostEqual(0.085, m[(2,)], 3)
+        self.assertAlmostEqual(0.098, m[(3,)], 3)
+        self.assertAlmostEqual(0.047, m[(4,)], 3)
+        self.assertAlmostEqual(0.020, m[(5,)], 3)
+        self.assertAlmostEqual(0.035, m[(6,)], 3)
+        self.assertAlmostEqual(0.13,  m[range(1, 5)], 2)
+        self.assertAlmostEqual(0.11,  m[range(1, 6)], 2)
+        self.assertAlmostEqual(0.012, m[range(2, 6)], 2)
+        self.assertAlmostEqual(0.14,  m[range(2, 7)], 2)
+        # bayesian
+        m = MassFunction.from_samples(precipitation_data, 0.05, mode='bayesian')
+        for e, n in precipitation_data.items():
+            self.assertEqual(n / sum(precipitation_data.values()), m[(e,)]) 
+        # TODO: test other modes
     
     def test_powerset(self):
         s = range(2)

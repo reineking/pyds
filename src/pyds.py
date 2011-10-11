@@ -21,10 +21,21 @@ A framework for performing computations in the Dempster-Shafer theory.
 """
 
 from itertools import chain, combinations
-from functools import reduce
+from functools import partial, reduce
 from operator import mul
-from math import log, fsum
+from math import log, fsum, sqrt
 from random import random, shuffle, uniform
+import sys
+
+try:
+    import numpy
+    try:
+        from scipy.stats import chi2
+        from scipy.optimize import fmin_cobyla
+    except:
+        print('SciPy not found: some features will not work.', file=sys.stderr)
+except:
+    print('NumPy not found: some features will not work.', file=sys.stderr)
 
 
 class MassFunction(dict):
@@ -716,6 +727,230 @@ class MassFunction(dict):
             return max(list)[1]
         else:
             return None
+    
+    @staticmethod
+    def _to_array_index(hypothesis, frame):
+        """Map a hypothesis to an array index given a frame of discernment."""
+        index = 0
+        for i, s in enumerate(frame):
+            if s in hypothesis:
+                index += 2**i
+        return index
+    
+    @staticmethod
+    def _from_array_index(index, frame):
+        """Map an array index to a hypothesis given a frame of discernment."""
+        hypothesis = set()
+        for i, s in enumerate(frame):
+            if 2**i & index:
+                hypothesis.add(s)
+        return frozenset(hypothesis)
+    
+    def to_array(self):
+        """
+        Convert the mass function to a NumPy array.
+        
+        Hypotheses are mapped to array indices using '_to_array_index'.
+        The resulting array has 2^n entries where n is the size of the frame of discernment.
+        The first entry is always 0 since it represents the empty set.
+        """
+        a = numpy.zeros(2**len(self.frame()))
+        frame = self.frame()
+        for h, v in self.items():
+            a[MassFunction._to_array_index(h, frame)] = v
+        return a
+    
+    @staticmethod
+    def from_array(a, frame):
+        """
+        Convert a NumPy array to a mass function given a frame of discernment.
+        
+        Array indices are mapped to hypotheses using '_from_array_index'.
+        """
+        m = MassFunction()
+        for i, v in enumerate(a):
+            if v > 0.0:
+                m[MassFunction._from_array_index(i, frame)] = v
+        return m
+    
+    @staticmethod
+    def _confidence_intervals(histogram, alpha):
+        """Compute Goodman confidence intervals."""
+        p_lower = {}
+        p_upper = {}
+        a = chi2.ppf(1 - alpha / len(histogram), 1)
+        n = sum(histogram.values())
+        for h, n_h in histogram.items():
+            delta_h = a * (a + 4 * n_h * (n - n_h) / n)
+            p_lower[h] = (a + 2 * n_h - sqrt(delta_h)) / (2 * (n + a))
+            p_upper[h] = (a + 2 * n_h + sqrt(delta_h)) / (2 * (n + a))
+        return p_lower, p_upper
+    
+    @staticmethod
+    def from_samples(histogram, alpha=0.05, *, mode='default'):
+        """
+        Generate a mass function from an empirical probability distribution that was obtained from a limited number of samples.
+        This makes the expected deviation of the empirical distribution from the true distribution explicit.
+        
+        'histogram' represents the empirical distribution. It is a dictionary mapping each possible event to the respective
+        number of observations (represented as integers).
+        
+        'mode' determines the algorithm used for generating the mass function.
+        Except for mode 'bayesian', all algorithms are based on the idea that the true probabilities lie within confidence intervals
+        represented by the mass function with confidence level 1 - 'alpha'.
+        
+        The following modes are supported:
+        
+        'default': Maximize the total belief by solving a linear program. (Attention: this becomes very expensive computationally
+        for larger numbers of events.)
+        
+        'ordered': Similar to 'default' except that the events are assumed to have a natural order (e.g., intervals), in which case
+        the mass function can be computed analytically and thus much faster.
+        
+        For more information on 'default' and 'ordered', see:
+        T. Denoeux (2006), "Constructing belief functions from sample data using multinomial confidence regions",
+        International Journal of Approximate Reasoning 42, 228-252.
+        
+        'consonant': Compute the least committed consonant mass function whose pignistic transformation lies within the confidence interval
+        induced by 'alpha'. Like 'default', it is based on solving a linear program and quickly becomes computationally expensive.
+        
+        'consonant-approximate': An approximation of 'consonant' that can be computed much more efficiently.
+        
+        For more information on these two modes, see:
+        A. Aregui, T. Denoeux (2008), "Constructing consonant belief functions from sample data using confidence sets of pignistic probabilities",
+        International Journal of Approximate Reasoning 49, 575-594.
+        
+        'bayesian': Disregard the number of samples and assume the true probability distribution is equal to the empirical one.
+        
+        
+        In case the sample number is 0, returns a vacuous mass function (or uniform distribution for 'bayesian').
+        
+        (Requires SciPy for computing confidence intervals and solving linear programs.)
+        """
+        if not isinstance(histogram, dict):
+            raise TypeError('histogram must be of type dict')
+        for v in histogram.values():
+            if not isinstance(v, int):
+                raise TypeError('all histogram values must be of type int')
+        if not histogram:
+            return MassFunction()
+        if sum(histogram.values()) == 0: # return vacuous/uniform belief if there are no samples
+            vac = MassFunction({tuple(histogram.keys()):1})
+            if mode == 'bayesian':
+                return vac.pignistic()
+            else:
+                return vac
+        if mode == 'bayesian':
+            return MassFunction({(h,):v for h, v in histogram.items()}).normalize()
+        elif mode == 'default':
+            return MassFunction._from_samples(histogram, alpha)
+        elif mode == 'ordered':
+            return MassFunction._from_samples(histogram, alpha, ordered=True)
+        elif mode == 'consonant':
+            return MassFunction._from_samples_consonant(histogram, alpha)
+        elif mode == 'consonant-approximate':
+            return MassFunction._from_samples_consonant(histogram, alpha, approximate=True)
+        raise ValueError('unknown mode: %s' % mode)
+        
+    @staticmethod
+    def _from_samples(histogram, alpha, ordered=False):
+        """
+        Reference:
+        T. Denoeux (2006), "Constructing belief functions from sample data using multinomial confidence regions",
+        International Journal of Approximate Reasoning 42, 228-252.
+        """
+        p_lower, p_upper = MassFunction._confidence_intervals(histogram, alpha)
+        def p_lower_set(hs):
+            l = u = 0
+            for h in H:
+                if h in hs:
+                    l += p_lower[h]
+                else:
+                    u += p_upper[h]
+            return max(l, 1 - u)
+        if ordered:
+            H = sorted(histogram.keys())
+            m = MassFunction()
+            for i1, h1 in enumerate(H):
+                m[(h1,)] = p_lower[h1]
+                for i2, h2 in enumerate(H[i1 + 1:]):
+                    i2 += i1 + 1
+                    if i2 == i1 + 1:
+                        v = p_lower_set(H[i1:i2 + 1]) - p_lower[h1] - p_lower[h2]
+                    else:
+                        v = p_lower_set(H[i1:i2 + 1]) - p_lower_set(H[i1 + 1:i2 + 1]) - p_lower_set(H[i1:i2]) + p_lower_set(H[i1 + 1:i2])
+                    if v > 0:
+                        m[H[i1:i2 + 1]] = v
+            return m
+        else:
+            H = list(histogram.keys())
+            L = 2**len(H)
+            initial = numpy.zeros(L)
+            cons = []
+            singletons = lambda index: [i for i in range(len(H)) if 2**i & index]
+            # constraint (24)
+            bel = lambda index, m: fsum(m[sum([2**i for i in h_ind])] for h_ind in powerset(singletons(index)))
+            c24 = lambda m, i: p_lower_set(MassFunction._from_array_index(i, H)) - bel(i, m)
+            for i in range(L):
+                cons.append(partial(c24, i=i))
+            # constraint (25)
+            cons.append(lambda m: m.sum() - 1.0)
+            cons.append(lambda m: 1.0 - m.sum())
+            # constraint (26)
+            for i in range(L):
+                cons.append(partial(lambda m, i_s: m[i_s], i_s=i))
+            f = lambda m: -1 * 2**len(H) * fsum([m[i] * 2**(-len(singletons(i))) for i in range(L)])
+            m_optimal = fmin_cobyla(f, initial, cons, disp=0)
+            return MassFunction.from_array(m_optimal, H)
+        
+    @staticmethod
+    def _from_samples_consonant(histogram, alpha, approximate=False):
+        """
+        Reference:
+        A. Aregui, T. Denoeux (2008), "Constructing consonant belief functions from sample data using confidence
+        sets of pignistic probabilities", International Journal of Approximate Reasoning 49, 575-594.
+        """
+        p_lower, p_upper = MassFunction._confidence_intervals(histogram, alpha)
+        H = list(histogram.keys())
+        if approximate:
+            # approximate possibility distribution
+            poss = {h1:min(1, fsum([min(p_upper[h1], p_upper[h2]) for h2 in H])) for h1 in H}
+        else:
+            # optimal possibility distribution (based on linear programming)
+            poss = {h:0 for h in H}
+            for k, h_k in enumerate(H):
+                S_k = {l for l in range(len(H)) if p_lower[H[l]] >= p_upper[h_k]}
+                S_k.add(k)
+                I_k = {l for l in range(len(H)) if p_upper[H[l]] < p_lower[h_k]}
+                P_k = set(range(len(H))).difference(S_k.union(I_k))
+                for A in powerset(P_k):
+                    G = S_k.union(A)
+                    G_c = set(range(len(H))).difference(G)
+                    cons = []
+                    # constraint (26)
+                    for i, h in enumerate(H):
+                        cons.append(partial(lambda p, i_s, p_s: p[i_s] - p_s, i_s=i, p_s=p_lower[h])) # lower bound
+                        cons.append(partial(lambda p, i_s, p_s: p_s - p[i_s], i_s=i, p_s=p_upper[h])) # upper bound
+                    # constraint (27)
+                    cons.append(lambda p: 1 - sum(p))
+                    cons.append(lambda p: sum(p) - 1)
+                    # constraint (30)
+                    for i in G:
+                        cons.append(partial(lambda p, i_s: p[i_s] - p[k], i_s=i))
+                    # constraint (31)
+                    for i in G_c:
+                        cons.append(partial(lambda p, i_s: p[k] - p[i_s], i_s=i))
+                    initial = [1.0 / len(H)] * len(H)
+                    f = lambda p: -(fsum([p[i] for i in G_c]) + len(G) * p[k])
+                    poss_optimal = fmin_cobyla(f, initial, cons, disp=0)
+                    poss[h_k] = max(poss[h_k], -f(poss_optimal))
+        # compute consonant mass function
+        H, P = zip(*sorted(poss.items(), key=lambda e: e[1], reverse=True))
+        m = MassFunction()
+        m[H] = P[-1]
+        for i in range(len(H) - 1):
+            m[H[:i + 1]] = P[i] - P[i + 1]
+        return m.prune().normalize()
 
 
 def powerset(set):
