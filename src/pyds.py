@@ -569,6 +569,16 @@ class MassFunction(dict):
                 c += v * log(len(h) / v, 2)
         return c
     
+    def hartley_measure(self):
+        """
+        Computes the Hartley-like measure in order to quantify the amount of imprecision.
+        
+        For more information, see:
+        G. J. Klir (1999), "Uncertainty and information measures for imprecise probabilities: An overview",
+        International Symposium on Imprecise Probabilities and Their Applications.
+        """
+        return fsum([v * log(len(h), 2) for h, v in self.items()])
+    
     def norm(self, m, p=2):
         """
         Computes the p-norm between two mass functions (default is p=2).

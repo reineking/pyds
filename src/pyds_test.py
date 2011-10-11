@@ -244,6 +244,9 @@ class PyDSTest(unittest.TestCase):
         h = -0.125 * log(0.125, 2) - 0.075 * log(0.075, 2) - 0.275 * log(0.275, 2) - 0.525 * log(0.525, 2)
         self.assertAlmostEqual(h, self.m1.pignistic().local_conflict())
     
+    def test_hartley_measure(self):
+        self.assertEqual(0.1 + 0.3 * log(4, 2), self.m1.hartley_measure())
+    
     def test_norm(self):
         self.assertEqual(0, self.m1.norm(self.m1))
         self.assertEqual(0, self.m1.norm(self.m1, p = 1))
