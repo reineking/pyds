@@ -356,6 +356,31 @@ class PyDSTest(unittest.TestCase):
         for p in self.m1.sample_probability_distributions(100):
             self.assertTrue(self.m1.is_compatible(p))
     
+    def test_from_possibility(self):
+        """
+        Example 1 from:
+        D. Dubois, H. Prade, P. Smets (2008), "A definition of subjective possibility",
+        International Journal of Approximate Reasoning 48 (2), 352-364.
+        """
+        x = 0.6
+        poss = {'a':1, 'b':x, 'c':1-x}
+        m = MassFunction.from_possibility(poss)
+        self.assertEqual(1 - x, m['a'])
+        self.assertEqual(2 * x - 1, m['ab'])
+        self.assertEqual(1 - x, m['abc'])
+    
+    def test_pignistic_inverse(self):
+        """
+        Example 1 from:
+        A. Aregui, T. Denoeux (2008), "Constructing consonant belief functions from sample data using confidence sets of pignistic probabilities",
+        International Journal of Approximate Reasoning 49, 575-594.
+        """
+        p = MassFunction({'a':0.7, 'b':0.2, 'c':0.1})
+        m = MassFunction.pignistic_inverse(p)
+        self.assertEqual(0.5, m['a'])
+        self.assertAlmostEqual(0.2, m['ab'])
+        self.assertAlmostEqual(0.3, m['abc'])
+    
     def test_to_array_index(self):
         self.assertEqual(0, MassFunction._to_array_index((), ('a', 'b', 'c')))
         self.assertEqual(1, MassFunction._to_array_index(('a',), ('a', 'b', 'c')))
@@ -445,7 +470,7 @@ class PyDSTest(unittest.TestCase):
         m = MassFunction.gbt(likelihoods)
         for h in m:
             self.assertAlmostEqual(m.q(h), gbt_q(h, likelihoods), 8)
-
+        
 
 if __name__ == "__main__":
     unittest.main()

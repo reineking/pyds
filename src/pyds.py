@@ -728,6 +728,51 @@ class MassFunction(dict):
         else:
             return None
     
+    def to_dict(self):
+        """Convert a mass function only consisting of singletons to a dictionary by removing each enclosing frozenset."""
+        if not self.is_probabilistic():
+            raise Exception('mass function must only contain singletons')
+        return {tuple(h)[0]:v for h, v in self.items()}
+    
+    @staticmethod
+    def from_dict(d):
+        """Convert a dictionary to a mass function by enclosing each key with a frozenset."""
+        if isinstance(d, MassFunction):
+            return d
+        else:
+            return MassFunction({frozenset((h,)):v for h, v in d.items()})
+    
+    @staticmethod
+    def from_possibility(poss):
+        """
+        Constructs a consonant mass function from a possibility distribution.
+                
+        For more information, see:
+        D. Dubois, H. Prade (1982), "On several representations of an uncertainty body of evidence",
+        Fuzzy Information and Decision Processes, 167–181.
+        """
+        if isinstance(poss, MassFunction):
+            poss = poss.to_dict() # remove enclosing sets
+        H, P = zip(*sorted(poss.items(), key=lambda e: e[1], reverse=True)) # sort possibility values in descending order
+        m = MassFunction()
+        m[H] = P[-1]
+        for i in range(len(H) - 1):
+            m[H[:i + 1]] = P[i] - P[i + 1]
+        return m.prune()
+    
+    @staticmethod
+    def pignistic_inverse(p):
+        """
+        Constructs a consonant mass function from a pignistic probability distribution by applying the inverse pignistic transformation.
+        
+        For more information, see:
+        D. Dubois, H. Prade, P. Smets (2008), "A definition of subjective possibility",
+        International Journal of Approximate Reasoning 48 (2), 352-364.
+        """
+        p = MassFunction.from_dict(p)
+        poss = MassFunction({h1:fsum([min(p[h1], p[h2]) for h2 in p.keys()]) for h1 in p.keys()})
+        return MassFunction.from_possibility(poss)
+    
     @staticmethod
     def _to_array_index(hypothesis, frame):
         """Map a hypothesis to an array index given a frame of discernment."""
@@ -851,7 +896,7 @@ class MassFunction(dict):
         elif mode == 'consonant-approximate':
             return MassFunction._from_samples_consonant(histogram, alpha, approximate=True)
         raise ValueError('unknown mode: %s' % mode)
-        
+    
     @staticmethod
     def _from_samples(histogram, alpha, ordered=False):
         """
@@ -944,13 +989,7 @@ class MassFunction(dict):
                     f = lambda p: -(fsum([p[i] for i in G_c]) + len(G) * p[k])
                     poss_optimal = fmin_cobyla(f, initial, cons, disp=0)
                     poss[h_k] = max(poss[h_k], -f(poss_optimal))
-        # compute consonant mass function
-        H, P = zip(*sorted(poss.items(), key=lambda e: e[1], reverse=True))
-        m = MassFunction()
-        m[H] = P[-1]
-        for i in range(len(H) - 1):
-            m[H[:i + 1]] = P[i] - P[i + 1]
-        return m.prune().normalize()
+        return MassFunction.from_possibility(poss)
 
 
 def powerset(set):
