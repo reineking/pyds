@@ -249,6 +249,10 @@ class MassFunction(dict):
             else:
                 return frozenset.union(*focal)
     
+    def all(self):
+        """Returns an iterator over all subsets of the frame of discernment, including the empty set."""
+        return powerset(self.frame())
+    
     def bel(self, hypothesis=None):
         """
         Computes either the belief of 'hypothesis' or the entire belief function (hypothesis=None).
@@ -758,7 +762,7 @@ class MassFunction(dict):
         m[H] = P[-1]
         for i in range(len(H) - 1):
             m[H[:i + 1]] = P[i] - P[i + 1]
-        return m.prune()
+        return m
     
     @staticmethod
     def pignistic_inverse(p):
