@@ -511,6 +511,22 @@ class PyDSTest(unittest.TestCase):
         m = MassFunction.gbt(likelihoods)
         for h in m:
             self.assertAlmostEqual(m.q(h), gbt_q(h, likelihoods), 8)
+    
+    def test_multiplication(self):
+        product = 0.5 * self.m1
+        for (h, v) in self.m1.items():
+            self.assertEqual(0.5 * v, product[h])
+        self._assert_equal_belief(0.5 * self.m1, self.m1 * 0.5)
+    
+    def test_addition(self):
+        m_sum = self.m2 + self.m3
+        self.assertEqual(0.4, m_sum['c'])
+        self.assertEqual(0.6, m_sum['a', 'c'])
+        self.assertEqual(0.5, m_sum['b'])
+        self.assertEqual(0.4, m_sum[()])
+        self.assertEqual(0.1, m_sum['a', 'b'])
+        self.assertEqual(0.0, m_sum['a'])
+        
         
 
 if __name__ == "__main__":

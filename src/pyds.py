@@ -315,6 +315,25 @@ class MassFunction(dict):
         hyp = sorted([(v, h) for (h, v) in self.items()], reverse=True)
         return "{" + "; ".join([str(set(h)) + ":" + str(v) for (v, h) in hyp]) + "}"
     
+    def __mul__(self, scalar):
+        if not isinstance(scalar, float):
+            raise TypeError('Can only multiply by a float value.')
+        m = MassFunction()
+        for (h, v) in self.items():
+            m[h] = v * scalar
+        return m
+    
+    def __rmul__(self, scalar):
+        return self.__mul__(scalar)
+    
+    def __add__(self, m):
+        if not isinstance(m, MassFunction):
+            raise TypeError('Can only add two mass functions.')
+        result = self.copy()
+        for (h, v) in m.items():
+            result[h] += v
+        return result
+    
     def combine_conjunctive(self, *mass_functions, normalization=True, sample_count=None, importance_sampling=False):
         """
         Conjunctively combines the mass function with another mass function and returns the combination as a new mass function.
@@ -726,9 +745,9 @@ class MassFunction(dict):
     def _max_singleton(self, f):
         st = self.singletons()
         if st:
-            list = [(f(s), s) for s in st]
-            shuffle(list)
-            return max(list)[1]
+            value_list = [(f(s), s) for s in st]
+            shuffle(value_list)
+            return max(value_list)[1]
         else:
             return None
     
