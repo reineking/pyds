@@ -489,7 +489,7 @@ class MassFunction(dict):
         if c >= 1.0:
             return float("inf")
         else:
-            return -log(1.0 - c, 2)
+            return -log(1.0 - c)
     
     def normalize(self):
         """

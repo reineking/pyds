@@ -195,8 +195,8 @@ class PyDSTest(unittest.TestCase):
             self.assertAlmostEqual(v, m_multi[h])
     
     def test_conflict(self):
-        self.assertEqual(-log(0.55, 2), self.m1.conflict(self.m2));
-        self.assertAlmostEqual(-log(0.55, 2), self.m1.conflict(self.m2, sample_count=1000), 1);
+        self.assertEqual(-log(0.55), self.m1.conflict(self.m2), 8);
+        self.assertAlmostEqual(-log(0.55), self.m1.conflict(self.m2, sample_count=1000), 1);
         self.assertEqual(float('inf'), self.m1.conflict(MassFunction({'e': 1})));
     
     def test_normalize(self):
