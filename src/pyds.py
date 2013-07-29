@@ -1022,7 +1022,7 @@ def powerset(iterable):
     'set' is an arbitrary iterator over hashable elements.
     All returned subsets are of type 'frozenset'.
     """
-    return map(frozenset, chain.from_iterable(combinations(set, r) for r in range(len(set) + 1)))
+    return map(frozenset, chain.from_iterable(combinations(iterable, r) for r in range(len(iterable) + 1)))
 
 def gbt_m(hypothesis, likelihoods, normalization=True):
     """
