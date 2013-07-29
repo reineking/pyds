@@ -1015,7 +1015,7 @@ class MassFunction(dict):
         return MassFunction.from_possibility(poss)
 
 
-def powerset(set):
+def powerset(iterable):
     """
     Returns an iterator over the power set of 'set'.
     
@@ -1045,8 +1045,8 @@ def gbt_bel(hypothesis, likelihoods, normalization=True):
         likelihoods = list(likelihoods.items())
     eta = _gbt_normalization(likelihoods) if normalization else 1.0
     exc = reduce(mul, [1.0 - l[1] for l in likelihoods if l[0] not in hypothesis], 1.0)
-    all = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
-    return eta * (exc - all)
+    all_hyp = reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0)
+    return eta * (exc - all_hyp)
 
 def gbt_pl(hypothesis, likelihoods, normalization=True):
     """

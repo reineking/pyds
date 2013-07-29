@@ -322,8 +322,8 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual({'a', 'b'}, self.m1.core(self.m2))
     
     def test_all(self):
-        all = {frozenset(), frozenset('a'), frozenset('b'), frozenset('ab')}
-        self.assertSetEqual(all, set(MassFunction({'a':0.1, 'b':0}).all()))
+        expected = {frozenset(), frozenset('a'), frozenset('b'), frozenset('ab')}
+        self.assertSetEqual(expected, set(MassFunction({'a':0.1, 'b':0}).all()))
     
     def test_max_bel(self):
         self.assertEqual(frozenset('a'), self.m1.max_bel())
