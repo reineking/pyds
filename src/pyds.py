@@ -127,7 +127,7 @@ class MassFunction(dict):
         """
         Creates a mass function from a corresponding belief function.
         
-        'bel' is a dictionary mapping hypotheses to belief values like to one returned by 'bel()'.
+        'bel' is a dictionary mapping hypotheses to belief values (like the dictionary returned by 'bel(None)').
         """
         m = MassFunction()
         for h1 in bel.keys():
@@ -144,7 +144,7 @@ class MassFunction(dict):
         """
         Creates a mass function from a corresponding plausibility function.
         
-        'pl' is a dictionary mapping hypotheses to plausibility values like to one returned by 'pl()'.
+        'pl' is a dictionary mapping hypotheses to plausibility values (like the dictionary returned by 'pl(None)').
         """
         frame = max(pl.keys(), key=len)
         bel_theta = pl[frame]
@@ -156,7 +156,7 @@ class MassFunction(dict):
         """
         Creates a mass function from a corresponding commonality function.
         
-        'q' is a dictionary mapping hypotheses to commonality values like to one returned by 'q()'.
+        'q' is a dictionary mapping hypotheses to commonality values (like the dictionary returned by 'q(None)').
         """
         m = MassFunction()
         frame = max(q.keys(), key=len)
@@ -772,7 +772,7 @@ class MassFunction(dict):
                 
         For more information, see:
         D. Dubois, H. Prade (1982), "On several representations of an uncertainty body of evidence",
-        Fuzzy Information and Decision Processes, 167–181.
+        Fuzzy Information and Decision Processes, 167-181.
         """
         if isinstance(poss, MassFunction):
             poss = poss.to_dict() # remove enclosing sets
@@ -844,12 +844,12 @@ class MassFunction(dict):
         """Compute Goodman confidence intervals."""
         p_lower = {}
         p_upper = {}
-        a = chi2.ppf(1 - alpha / len(histogram), 1)
+        a = chi2.ppf(1. - alpha / len(histogram), 1)
         n = sum(histogram.values())
         for h, n_h in histogram.items():
-            delta_h = a * (a + 4 * n_h * (n - n_h) / n)
-            p_lower[h] = (a + 2 * n_h - sqrt(delta_h)) / (2 * (n + a))
-            p_upper[h] = (a + 2 * n_h + sqrt(delta_h)) / (2 * (n + a))
+            delta_h = a * (a + 4. * n_h * (n - n_h) / n)
+            p_lower[h] = (a + 2. * n_h - sqrt(delta_h)) / (2. * (n + a))
+            p_upper[h] = (a + 2. * n_h + sqrt(delta_h)) / (2. * (n + a))
         return p_lower, p_upper
     
     @staticmethod
@@ -983,7 +983,7 @@ class MassFunction(dict):
             poss = {h1:min(1, fsum([min(p_upper[h1], p_upper[h2]) for h2 in H])) for h1 in H}
         else:
             # optimal possibility distribution (based on linear programming)
-            poss = {h:0 for h in H}
+            poss = {h:0. for h in H}
             for k, h_k in enumerate(H):
                 S_k = {l for l in range(len(H)) if p_lower[H[l]] >= p_upper[h_k]}
                 S_k.add(k)
@@ -998,8 +998,8 @@ class MassFunction(dict):
                         cons.append(partial(lambda p, i_s, p_s: p[i_s] - p_s, i_s=i, p_s=p_lower[h])) # lower bound
                         cons.append(partial(lambda p, i_s, p_s: p_s - p[i_s], i_s=i, p_s=p_upper[h])) # upper bound
                     # constraint (27)
-                    cons.append(lambda p: 1 - sum(p))
-                    cons.append(lambda p: sum(p) - 1)
+                    cons.append(lambda p: 1. - sum(p))
+                    cons.append(lambda p: sum(p) - 1.)
                     # constraint (30)
                     for i in G:
                         cons.append(partial(lambda p, i_s: p[i_s] - p[k], i_s=i))
