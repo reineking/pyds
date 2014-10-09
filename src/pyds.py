@@ -1070,6 +1070,53 @@ def gbt_q(hypothesis, likelihoods, normalization=True):
     eta = _gbt_normalization(likelihoods) if normalization else 1.0
     return eta * reduce(mul, [l[1] for l in likelihoods if l[0] in hypothesis], 1.0)
 
+def gbt_pignistic(singleton, likelihoods):
+    """
+    Computes the pignistic probability of 'singleton' for the belief function obtained
+    by applying the generalized Bayesian theorem to 'likelihoods'.
+    
+    This function has time complexity O(len(likelihoods)**2) and is equivalent to the following
+    expression (which has exponential complexity):
+    MassFunction.gbt(likelihoods).pignistic()[(singleton,)]
+    """
+    if isinstance(likelihoods, dict):
+        likelihoods = list(likelihoods.items())
+    singleton_lh = None
+    lh_values = []
+    for h, v in likelihoods:
+        if h == singleton:
+            singleton_lh = v
+        else:
+            lh_values.append(v)
+    if singleton_lh is None:
+        raise ValueError('singleton %s is not contained in likelihoods' % repr(singleton))
+    m_sum = _gbt_pignistic_recursive(lh_values, 0)
+    eta = _gbt_normalization(likelihoods)
+    return sum([eta * v * singleton_lh / (c + 1.) for c, v in enumerate(m_sum)])
+
+def _gbt_pignistic_recursive(likelihoods, i):
+    """
+    Helper function for recursively computing the pignistic probability corresponding to the GBT.
+    
+    This function computes the sum over all mass values (obtained via the GBT) and groups them by the
+    cardinalities of the corresponding sets.
+    """
+    if i == len(likelihoods) - 1:
+        m_sum = [0.] * (len(likelihoods) + 1)
+        m_sum[0] = 1. - likelihoods[i]
+        m_sum[1] = likelihoods[i]
+        return m_sum
+    else:
+        m_sum = _gbt_pignistic_recursive(likelihoods, i + 1)
+        m_sum_inc = [0.] * (len(likelihoods) + 1)
+        m_sum_exc = [0.] * (len(likelihoods) + 1)
+        for k in range(len(likelihoods) + 1):
+            if k < len(likelihoods):
+                m_sum_inc[k+1] = m_sum[k] * likelihoods[i]
+            m_sum_exc[k] = m_sum[k] * (1. - likelihoods[i])
+            m_sum[k] = m_sum_inc[k] + m_sum_exc[k]
+        return m_sum
+
 def _gbt_normalization(likelihoods):
     """Helper function for computing the GBT normalization constant."""
     return 1.0 / (1.0 - reduce(mul, [1.0 - l[1] for l in likelihoods], 1.0))

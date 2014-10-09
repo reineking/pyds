@@ -23,7 +23,7 @@ Unit tests for "pyds.py".
 import unittest
 from math import log, isnan
 from itertools import product
-from pyds import MassFunction, powerset, gbt_m, gbt_bel, gbt_pl, gbt_q
+from pyds import MassFunction, powerset, gbt_m, gbt_bel, gbt_pl, gbt_q, gbt_pignistic
 import random
 
 
@@ -511,6 +511,12 @@ class PyDSTest(unittest.TestCase):
         m = MassFunction.gbt(likelihoods)
         for h in m:
             self.assertAlmostEqual(m.q(h), gbt_q(h, likelihoods), 8)
+    
+    def test_gbt_pignistic(self):
+        likelihoods = {'a':0.3, 'b':0.8, 'c':0.0, 'd':0.5, 'e':1.0}
+        p = MassFunction.gbt(likelihoods).pignistic()
+        for s in p:
+            self.assertAlmostEqual(p[s], gbt_pignistic(tuple(s)[0], likelihoods), 8)
     
     def test_multiplication(self):
         product = 0.5 * self.m1
