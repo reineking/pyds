@@ -300,7 +300,7 @@ class MassFunction(dict):
             return {h:self.q(h) for h in powerset(self.core())}
         else:
             if not hypothesis:
-                return 0.0
+                return 1.0
             else:
                 return fsum([v for (h, v) in self.items() if h.issuperset(hypothesis)])
     
@@ -335,6 +335,24 @@ class MassFunction(dict):
             result[h] += v
         return result
     
+    def weight_function(self):
+        """
+        Computes the weight function corresponding to this mass function.
+        """
+        weights = dict()
+        q = self.q()
+        theta = self.frame()
+        for h in powerset(theta):
+            if len(h) < len(theta): # weight is undefined for theta
+                sets = [h | c for c in powerset(theta - h)]
+                q_even = reduce(mul, [q[h2] for h2 in sets if len(h2) % 2 == 0], 1.0)
+                q_odd = reduce(mul, [q[h2] for h2 in sets if len(h2) % 2 == 1], 1.0)
+                if len(h) % 2 == 0:
+                    weights[h] = q_odd / q_even
+                else:
+                    weights[h] = q_even / q_odd
+        return weights
+    
     def combine_conjunctive(self, mass_function, normalization=True, sample_count=None, importance_sampling=False):
         """
         Conjunctively combines the mass function with another mass function and returns the combination as a new mass function.
@@ -364,6 +382,24 @@ class MassFunction(dict):
         If 'sample_count' is not None, the true combination is approximated using the specified number of samples.
         """
         return self._combine(mass_function, rule=lambda s1, s2: s1 | s2, normalization=False, sample_count=sample_count, importance_sampling=False)
+    
+    def combine_cautious(self, mass_function):
+        """
+        Combines the mass function with another mass function using the cautious rule and returns the combination as a new mass function.
+        
+        For more details, see:
+        T. Denoeux (2008), "Conjunctive and disjunctive combination of belief functions induced by nondistinct bodies of evidence",
+        Artificial Intelligence 172, 234-264.
+        """
+        w1 = self.weight_function()
+        w2 = mass_function.weight_function()
+        w_min = {h:min(w1[h], w2[h]) for h in w1}
+        theta = self.frame()
+        m = MassFunction({theta:1.0})
+        for h, w in w_min.items():
+            m_simple = MassFunction({theta:w, h:1.0 - w})
+            m = m.combine_conjunctive(m_simple, normalization=False)
+        return m
     
     def _combine(self, mass_function, rule, normalization, sample_count, importance_sampling):
         """Helper method for combining two or more mass functions."""

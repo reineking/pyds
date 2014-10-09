@@ -118,7 +118,7 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(0.5, self.m1.q('b'))
         self.assertEqual(0.4, self.m1.q('ad'))
         self.assertEqual(0.3, self.m1.q('abcd'))
-        self.assertEqual(0.0, self.m3.q(''))
+        self.assertEqual(1.0, self.m3.q(''))
         self.assertEqual(0.4, self.m3.q('a'))
         self.assertEqual(0.3, self.m3.q('ac'))
         # compute the entire commonality function
@@ -193,6 +193,49 @@ class PyDSTest(unittest.TestCase):
         m_multi = self.m1.combine_disjunctive([self.m1, self.m2])
         for h, v in m_single.items():
             self.assertAlmostEqual(v, m_multi[h])
+    
+    def test_weight_function(self):
+        """
+        Examples from:
+        T. Denoeux (2008), "Conjunctive and disjunctive combination of belief functions induced by nondistinct bodies of evidence",
+        Artificial Intelligence 172, 234-264.
+        """
+        m1 = MassFunction({'ab':0.3, 'bc':0.5, 'abc':0.2})
+        w1 = m1.weight_function()
+        self.assertAlmostEqual(1.0, w1[frozenset('')])
+        self.assertAlmostEqual(1.0, w1[frozenset('a')])
+        self.assertAlmostEqual(7./4., w1[frozenset('b')])
+        self.assertAlmostEqual(2./5., w1[frozenset('ab')])
+        self.assertAlmostEqual(1.0, w1[frozenset('c')])
+        self.assertAlmostEqual(1.0, w1[frozenset('ac')])
+        self.assertAlmostEqual(2./7., w1[frozenset('bc')])
+        m2 = MassFunction({'b':0.3, 'bc':0.4, 'abc':0.3})
+        w2 = m2.weight_function()
+        self.assertAlmostEqual(1.0, w2[frozenset('')])
+        self.assertAlmostEqual(1.0, w2[frozenset('a')])
+        self.assertAlmostEqual(0.7, w2[frozenset('b')])
+        self.assertAlmostEqual(1.0, w2[frozenset('ab')])
+        self.assertAlmostEqual(1.0, w2[frozenset('c')])
+        self.assertAlmostEqual(1.0, w2[frozenset('ac')])
+        self.assertAlmostEqual(3./7., w2[frozenset('bc')])
+    
+    def test_combine_cautious(self):
+        """
+        Examples from:
+        T. Denoeux (2008), "Conjunctive and disjunctive combination of belief functions induced by nondistinct bodies of evidence",
+        Artificial Intelligence 172, 234-264.
+        """
+        m1 = MassFunction({'ab':0.3, 'bc':0.5, 'abc':0.2})
+        m2 = MassFunction({'b':0.3, 'bc':0.4, 'abc':0.3})
+        m = m1.combine_cautious(m2)
+        self.assertAlmostEqual(0.0, m[''])
+        self.assertAlmostEqual(0.0, m['a'])
+        self.assertAlmostEqual(0.6, m['b'])
+        self.assertAlmostEqual(0.12, m['ab'])
+        self.assertAlmostEqual(0.0, m['c'])
+        self.assertAlmostEqual(0.0, m['ac'])
+        self.assertAlmostEqual(0.2, m['bc'])
+        self.assertAlmostEqual(0.08, m['abc'])
     
     def test_conflict(self):
         self.assertAlmostEqual(-log(0.55), self.m1.conflict(self.m2), 8);
