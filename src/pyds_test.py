@@ -167,8 +167,8 @@ class PyDSTest(unittest.TestCase):
         test(self.m1.combine_conjunctive(self.m2, sample_count=1000, importance_sampling=True), 0.0)
         # unnormalized
         test(self.m1.combine_conjunctive(self.m2, normalization=False), 0.45)
-        test(self.m1.combine_conjunctive(self.m2, normalization=False, sample_count=10000), 0.45, 2)
-        test(self.m1.combine_conjunctive(self.m2, normalization=False, sample_count=1000, importance_sampling=True), 0.45, 2) # ImpSam should be ignored
+        test(self.m1.combine_conjunctive(self.m2, normalization=False, sample_count=10000), 0.45, 1)
+        test(self.m1.combine_conjunctive(self.m2, normalization=False, sample_count=10000, importance_sampling=True), 0.45, 1) # ImpSam should be ignored
         # combine multiple mass functions
         m_single = self.m1.combine_conjunctive(self.m1).combine_conjunctive(self.m2)
         m_multi = self.m1.combine_conjunctive(self.m1, self.m2)
@@ -187,7 +187,7 @@ class PyDSTest(unittest.TestCase):
             self.assertAlmostEqual(0.05, m['acd'], places)
             self.assertAlmostEqual(0.3, m['abcd'], places)
         test(self.m1 | self.m2, 10)
-        test(self.m1.combine_disjunctive(self.m2, sample_count=10000), 2)
+        test(self.m1.combine_disjunctive(self.m2, sample_count=10000), 1)
         # combine multiple mass functions
         m_single = self.m1.combine_disjunctive(self.m1).combine_disjunctive(self.m2)
         m_multi = self.m1.combine_disjunctive(self.m1, self.m2)
@@ -195,8 +195,8 @@ class PyDSTest(unittest.TestCase):
             self.assertAlmostEqual(v, m_multi[h])
     
     def test_conflict(self):
-        self.assertEqual(-log(0.55), self.m1.conflict(self.m2), 8);
-        self.assertAlmostEqual(-log(0.55), self.m1.conflict(self.m2, sample_count=1000), 1);
+        self.assertAlmostEqual(-log(0.55), self.m1.conflict(self.m2), 8);
+        self.assertAlmostEqual(-log(0.55), self.m1.conflict(self.m2, sample_count=10000), 1);
         self.assertEqual(float('inf'), self.m1.conflict(MassFunction({'e': 1})));
     
     def test_normalize(self):
@@ -293,9 +293,8 @@ class PyDSTest(unittest.TestCase):
         pl = [('a', 0.3), ('b', 0.8), ('c', 0.0)]
         test(MassFunction.gbt(pl), 10)
         test(MassFunction.gbt(pl, sample_count=10000), 2)
-        #pl = [('a', 0.3), ('b', 0.8), ('c', 0.0), ('d', 1.0)]
         pl = {'a':0.3, 'b':0.8, 'c':0.0, 'd':1.0}
-        self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, sample_count=10000), 2)
+        self._assert_equal_belief(MassFunction.gbt(pl), MassFunction.gbt(pl, sample_count=10000), 1)
     
     def test_frame(self):
         self.assertEqual({'a', 'b', 'c', 'd'}, self.m1.frame())
@@ -400,10 +399,10 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(frozenset(('a', 'b', 'c')), MassFunction._from_array_index(7, ('a', 'b', 'c')))
     
     def test_to_array(self):
-        self.assertListEqual([0, 0, 0.2, 0.3, 0.5, 0, 0, 0], list(self.m2.to_array()))
+        self.assertListEqual([0, 0, 0.5, 0.0, 0.2, 0.3, 0, 0], list(self.m2.to_array(('a', 'b', 'c'))))
     
     def test_from_array(self):
-        self._assert_equal_belief(self.m1, MassFunction.from_array(self.m1.to_array(), self.m1.frame()))
+        self._assert_equal_belief(self.m1, MassFunction.from_array(self.m1.to_array(self.m1.frame()), self.m1.frame()))
     
     def test_confidence_intervals(self):
         """

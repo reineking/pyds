@@ -486,7 +486,7 @@ class MassFunction(dict):
         """
         # compute full conjunctive combination (could be more efficient)
         c = self.combine_conjunctive(*mass_functions, normalization=False, sample_count=sample_count)[frozenset()]
-        if c >= 1.0:
+        if c >= 1.0 - 1E-8:
             return float("inf")
         else:
             return -log(1.0 - c)
@@ -659,7 +659,7 @@ class MassFunction(dict):
         """
         if not isinstance(n, int):
             raise TypeError("n must be int")
-        samples = {h:0 for h in self.keys()} if as_dict else []
+        samples = {h:0 for h in self} if as_dict else []
         mass_sum = fsum(self.values())
         if quantization:
             remainders = []
@@ -814,16 +814,14 @@ class MassFunction(dict):
                 hypothesis.add(s)
         return frozenset(hypothesis)
     
-    def to_array(self):
+    def to_array(self, frame):
         """
         Convert the mass function to a NumPy array.
         
         Hypotheses are mapped to array indices using '_to_array_index'.
         The resulting array has 2^n entries where n is the size of the frame of discernment.
-        The first entry is always 0 since it represents the empty set.
         """
-        a = numpy.zeros(2**len(self.frame()))
-        frame = self.frame()
+        a = numpy.zeros(2**len(frame))
         for h, v in self.items():
             a[MassFunction._to_array_index(h, frame)] = v
         return a
