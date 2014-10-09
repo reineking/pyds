@@ -171,7 +171,7 @@ class PyDSTest(unittest.TestCase):
         test(self.m1.combine_conjunctive(self.m2, normalization=False, sample_count=10000, importance_sampling=True), 0.45, 1) # ImpSam should be ignored
         # combine multiple mass functions
         m_single = self.m1.combine_conjunctive(self.m1).combine_conjunctive(self.m2)
-        m_multi = self.m1.combine_conjunctive(self.m1, self.m2)
+        m_multi = self.m1.combine_conjunctive([self.m1, self.m2])
         self._assert_equal_belief(m_single, m_multi, 10)
         # combine incompatible mass function
         self.assertFalse(self.m1 & MassFunction({(0, 1):0.8, (0,):0.2}))
@@ -190,7 +190,7 @@ class PyDSTest(unittest.TestCase):
         test(self.m1.combine_disjunctive(self.m2, sample_count=10000), 1)
         # combine multiple mass functions
         m_single = self.m1.combine_disjunctive(self.m1).combine_disjunctive(self.m2)
-        m_multi = self.m1.combine_disjunctive(self.m1, self.m2)
+        m_multi = self.m1.combine_disjunctive([self.m1, self.m2])
         for h, v in m_single.items():
             self.assertAlmostEqual(v, m_multi[h])
     
@@ -408,7 +408,7 @@ class PyDSTest(unittest.TestCase):
         """
         Numbers taken from:
         W.L. May, W.D. Johnson, A SAS macro for constructing simultaneous confidence intervals for multinomial proportions,
-        Computer methods and Programs in Biomedicine 53 (1997) 153–162.
+        Computer methods and Programs in Biomedicine 53 (1997) 153-162.
         """
         hist = {1:91, 2:49, 3:37, 4:43}
         lower, upper = MassFunction._confidence_intervals(hist, 0.05)
@@ -417,8 +417,8 @@ class PyDSTest(unittest.TestCase):
         self.assertAlmostEqual(0.11, lower[3], places=2)
         self.assertAlmostEqual(0.14, lower[4], places=2)
         for h, p_u in upper.items():
-            p = hist[h] / sum(hist.values())
-            self.assertAlmostEqual(2 * p - lower[h], p_u, places=1)
+            p = hist[h] / float(sum(hist.values()))
+            self.assertAlmostEqual(2. * p - lower[h], p_u, places=1)
     
     def test_from_samples(self):
         """
@@ -475,7 +475,7 @@ class PyDSTest(unittest.TestCase):
         # bayesian
         m = MassFunction.from_samples(precipitation_data, 0.05, mode='bayesian')
         for e, n in precipitation_data.items():
-            self.assertEqual(n / sum(precipitation_data.values()), m[(e,)]) 
+            self.assertEqual(n / float(sum(precipitation_data.values())), m[(e,)]) 
     
     def test_powerset(self):
         s = range(2)

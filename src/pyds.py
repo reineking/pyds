@@ -20,6 +20,7 @@
 A framework for performing computations in the Dempster-Shafer theory.
 """
 
+from __future__ import print_function
 from itertools import chain, combinations
 from functools import partial, reduce
 from operator import mul
@@ -72,7 +73,7 @@ class MassFunction(dict):
             return frozenset(hypothesis)
     
     @staticmethod
-    def gbt(likelihoods, *, normalization=True, sample_count=None):
+    def gbt(likelihoods, normalization=True, sample_count=None):
         """
         Constructs a mass function using the generalized Bayesian theorem.
         For more information, see Smets. 1993. Belief functions: 
@@ -334,7 +335,7 @@ class MassFunction(dict):
             result[h] += v
         return result
     
-    def combine_conjunctive(self, *mass_functions, normalization=True, sample_count=None, importance_sampling=False):
+    def combine_conjunctive(self, mass_function, normalization=True, sample_count=None, importance_sampling=False):
         """
         Conjunctively combines the mass function with another mass function and returns the combination as a new mass function.
         
@@ -351,9 +352,9 @@ class MassFunction(dict):
         If importance_sampling=True, importance sampling is used to avoid empty intersections, which leads to a lower approximation error but is also slower.
         This method should be used if there is significant evidential conflict between the mass functions.
         """
-        return self._combine(*mass_functions, rule=lambda s1, s2: s1 & s2, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling)
+        return self._combine(mass_function, rule=lambda s1, s2: s1 & s2, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling)
     
-    def combine_disjunctive(self, *mass_functions, sample_count=None):
+    def combine_disjunctive(self, mass_function, sample_count=None):
         """
         Disjunctively combines the mass function with another mass function and returns the combination as a new mass function.
         
@@ -362,12 +363,14 @@ class MassFunction(dict):
         
         If 'sample_count' is not None, the true combination is approximated using the specified number of samples.
         """
-        return self._combine(*mass_functions, rule=lambda s1, s2: s1 | s2, normalization=False, sample_count=sample_count, importance_sampling=False)
+        return self._combine(mass_function, rule=lambda s1, s2: s1 | s2, normalization=False, sample_count=sample_count, importance_sampling=False)
     
-    def _combine(self, *mass_functions, rule, normalization, sample_count, importance_sampling):
+    def _combine(self, mass_function, rule, normalization, sample_count, importance_sampling):
         """Helper method for combining two or more mass functions."""
         combined = self
-        for m in mass_functions:
+        if isinstance(mass_function, MassFunction):
+            mass_function = [mass_function] # wrap single mass function
+        for m in mass_function:
             if not isinstance(m, MassFunction):
                 raise TypeError("expected type MassFunction but got %s; make sure to use keyword arguments for anything other than mass functions" % type(m))
             if sample_count == None:
@@ -408,7 +411,7 @@ class MassFunction(dict):
                 combined[s2] += weight
         return combined
     
-    def combine_gbt(self, likelihoods, *, normalization=True, sample_count=None, importance_sampling=True):
+    def combine_gbt(self, likelihoods, normalization=True, sample_count=None, importance_sampling=True):
         """
         Conjunctively combines the mass function with a mass function obtained from a sequence of
         likelihoods via the generalized Bayesian theorem and returns the combination as a new mass function.
@@ -466,7 +469,7 @@ class MassFunction(dict):
             else:
                 return combined
     
-    def condition(self, hypothesis, *, normalization=True):
+    def condition(self, hypothesis, normalization=True):
         """
         Conditions the mass function with 'hypothesis'.
         
@@ -477,15 +480,17 @@ class MassFunction(dict):
         m = MassFunction({MassFunction._convert(hypothesis):1.0})
         return self.combine_conjunctive(m, normalization=normalization)
     
-    def conflict(self, *mass_functions, sample_count=None):
+    def conflict(self, mass_function, sample_count=None):
         """
         Calculates the weight of conflict between two or more mass functions.
+        
+        If 'mass_function' is not of type MassFunction, it is assumed to be an iterable containing multiple mass functions.
         
         The weight of conflict is computed as the (natural) logarithm of the normalization constant in Dempster's rule of combination.
         Returns infinity in case the mass functions are flatly contradicting.
         """
         # compute full conjunctive combination (could be more efficient)
-        c = self.combine_conjunctive(*mass_functions, normalization=False, sample_count=sample_count)[frozenset()]
+        c = self.combine_conjunctive(mass_function, normalization=False, sample_count=sample_count)[frozenset()]
         if c >= 1.0 - 1E-8:
             return float("inf")
         else:
@@ -517,7 +522,7 @@ class MassFunction(dict):
             del self[h]
         return self
     
-    def markov(self, transition_model, *, sample_count=None):
+    def markov(self, transition_model, sample_count=None):
         """
         Computes the mass function induced by a prior belief (self) and a transition model.
         
@@ -643,7 +648,7 @@ class MassFunction(dict):
         """
         return all([self.pl(h) >= v for (h, v) in m.items()])
     
-    def sample(self, n, *, quantization=True, as_dict=False):
+    def sample(self, n, quantization=True, as_dict=False):
         """
         Returns n random samples from the mass distribution.
         
@@ -845,7 +850,7 @@ class MassFunction(dict):
         p_lower = {}
         p_upper = {}
         a = chi2.ppf(1. - alpha / len(histogram), 1)
-        n = sum(histogram.values())
+        n = float(sum(histogram.values()))
         for h, n_h in histogram.items():
             delta_h = a * (a + 4. * n_h * (n - n_h) / n)
             p_lower[h] = (a + 2. * n_h - sqrt(delta_h)) / (2. * (n + a))
@@ -853,7 +858,7 @@ class MassFunction(dict):
         return p_lower, p_upper
     
     @staticmethod
-    def from_samples(histogram, alpha=0.05, *, mode='default'):
+    def from_samples(histogram, alpha=0.05, mode='default'):
         """
         Generate a mass function from an empirical probability distribution that was obtained from a limited number of samples.
         This makes the expected deviation of the empirical distribution from the true distribution explicit.
