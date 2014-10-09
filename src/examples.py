@@ -20,6 +20,7 @@
 Shows different use cases of the library.
 """
 
+from __future__ import print_function
 from pyds import MassFunction
 from itertools import product
 
@@ -89,3 +90,12 @@ extended = m1.map(lambda h: product(h, {1, 2}))
 print('vacuous extension of m_1 to {1, 2} =', extended)
 projected = extended.map(lambda h: (t[0] for t in h))
 print('project m_1 back to its original frame =', projected)
+
+print('\n=== construct belief from data ===')
+hist = {'a':2, 'b':0, 'c':1}
+print('histogram:', hist)
+print('maximum likelihood:', MassFunction.from_samples(hist, 'bayesian', s=0))
+print('Laplace smoothing:', MassFunction.from_samples(hist, 'bayesian', s=1))
+print('IDM:', MassFunction.from_samples(hist, 'idm'))
+print('MaxBel:', MassFunction.from_samples(hist, 'maxbel'))
+print('MCD:', MassFunction.from_samples(hist, 'mcd'))

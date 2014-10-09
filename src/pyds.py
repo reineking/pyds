@@ -894,7 +894,7 @@ class MassFunction(dict):
         return p_lower, p_upper
     
     @staticmethod
-    def from_samples(histogram, alpha=0.05, mode='default'):
+    def from_samples(histogram, method='idm', alpha=0.05, s=1.0):
         """
         Generate a mass function from an empirical probability distribution that was obtained from a limited number of samples.
         This makes the expected deviation of the empirical distribution from the true distribution explicit.
@@ -902,33 +902,37 @@ class MassFunction(dict):
         'histogram' represents the empirical distribution. It is a dictionary mapping each possible event to the respective
         number of observations (represented as integers).
         
-        'mode' determines the algorithm used for generating the mass function.
-        Except for mode 'bayesian', all algorithms are based on the idea that the true probabilities lie within confidence intervals
+        'method' determines the algorithm used for generating the mass function.
+        Except for method 'bayesian', all algorithms are based on the idea that the true probabilities lie within confidence intervals
         represented by the mass function with confidence level 1 - 'alpha'.
         
         The following modes are supported:
         
-        'default': Maximize the total belief by solving a linear program. (Attention: this becomes very expensive computationally
+        'idm': Imprecise Dirichlet model. A small amount of mass (controlled by 's') is assigned to the entire frame.
+        For more information on 'idm', see:
+        P. Walley (1996), "Inferences from multinomial data: learning about a bag of marbles",
+        Journal of the Royal Statistical Society. Series B (Methodological), 3-57.
+        
+        'maxbel': Maximize the total belief by solving a linear program. (Attention: this becomes very computationally expensive
         for larger numbers of events.)
         
-        'ordered': Similar to 'default' except that the events are assumed to have a natural order (e.g., intervals), in which case
+        'maxbel-ordered': Similar to 'maxbel' except that the events are assumed to have a natural order (e.g., intervals), in which case
         the mass function can be computed analytically and thus much faster.
         
-        For more information on 'default' and 'ordered', see:
+        For more information on 'maxbel' and 'maxbel-ordered', see:
         T. Denoeux (2006), "Constructing belief functions from sample data using multinomial confidence regions",
         International Journal of Approximate Reasoning 42, 228-252.
         
-        'consonant': Compute the least committed consonant mass function whose pignistic transformation lies within the confidence interval
-        induced by 'alpha'. Like 'default', it is based on solving a linear program and quickly becomes computationally expensive.
+        'mcd': Compute the least committed consonant mass function whose pignistic transformation lies within the confidence interval
+        induced by 'alpha'. Like 'maxbel', it is based on solving a linear program and quickly becomes computationally expensive.
         
-        'consonant-approximate': An approximation of 'consonant' that can be computed much more efficiently.
+        'mcd-approximate': An approximation of 'mcd' that can be computed much more efficiently.
         
-        For more information on these two modes, see:
+        For more information on these two methods, see:
         A. Aregui, T. Denoeux (2008), "Constructing consonant belief functions from sample data using confidence sets of pignistic probabilities",
         International Journal of Approximate Reasoning 49, 575-594.
         
-        'bayesian': Disregard the number of samples and assume the true probability distribution is equal to the empirical one.
-        
+        'bayesian': Construct a Bayesian mass function based on the relative frequencies. In addition, additive smoothing is applied (controlled by 's'). 
         
         In case the sample number is 0, returns a vacuous mass function (or uniform distribution for 'bayesian').
         
@@ -943,24 +947,40 @@ class MassFunction(dict):
             return MassFunction()
         if sum(histogram.values()) == 0: # return vacuous/uniform belief if there are no samples
             vac = MassFunction({tuple(histogram.keys()):1})
-            if mode == 'bayesian':
+            if method == 'bayesian':
                 return vac.pignistic()
             else:
                 return vac
-        if mode == 'bayesian':
-            return MassFunction({(h,):v for h, v in histogram.items()}).normalize()
-        elif mode == 'default':
-            return MassFunction._from_samples(histogram, alpha)
-        elif mode == 'ordered':
-            return MassFunction._from_samples(histogram, alpha, ordered=True)
-        elif mode == 'consonant':
-            return MassFunction._from_samples_consonant(histogram, alpha)
-        elif mode == 'consonant-approximate':
-            return MassFunction._from_samples_consonant(histogram, alpha, approximate=True)
-        raise ValueError('unknown mode: %s' % mode)
+        if method == 'bayesian':
+            return MassFunction({(h,):v + s for h, v in histogram.items()}).normalize()
+        elif method == 'idm':
+            return MassFunction._from_samples_idm(histogram, s)
+        elif method == 'maxbel':
+            return MassFunction._from_samples_maxbel(histogram, alpha)
+        elif method == 'maxbel-ordered':
+            return MassFunction._from_samples_maxbel(histogram, alpha, ordered=True)
+        elif method == 'mcd':
+            return MassFunction._from_samples_mcd(histogram, alpha)
+        elif method == 'mcd-approximate':
+            return MassFunction._from_samples_mcd(histogram, alpha, approximate=True)
+        raise ValueError('unknown method: %s' % method)
     
     @staticmethod
-    def _from_samples(histogram, alpha, ordered=False):
+    def _from_samples_idm(histogram, s):
+        """
+        Reference:
+        P. Walley (1996), "Inferences from multinomial data: learning about a bag of marbles",
+        Journal of the Royal Statistical Society. Series B (Methodological), 3-57.
+        """
+        total = sum(histogram.values())
+        m = MassFunction()
+        for h, c in histogram.items():
+            m[(h,)] = float(c) / (total + s)
+        m[MassFunction._convert(histogram.keys())] = float(s) / (total + s)
+        return m
+    
+    @staticmethod
+    def _from_samples_maxbel(histogram, alpha, ordered=False):
         """
         Reference:
         T. Denoeux (2006), "Constructing belief functions from sample data using multinomial confidence regions",
@@ -1011,7 +1031,7 @@ class MassFunction(dict):
             return MassFunction.from_array(m_optimal, H)
         
     @staticmethod
-    def _from_samples_consonant(histogram, alpha, approximate=False):
+    def _from_samples_mcd(histogram, alpha, approximate=False):
         """
         Reference:
         A. Aregui, T. Denoeux (2008), "Constructing consonant belief functions from sample data using confidence

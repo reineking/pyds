@@ -465,19 +465,19 @@ class PyDSTest(unittest.TestCase):
     
     def test_from_samples(self):
         """
-        Example 1 (default) and example 7 (ordered) from:
+        Example 1 (maxbel) and example 7 (ordered) from:
         T. Denoeux (2006), "Constructing belief functions from sample data using multinomial confidence regions",
         International Journal of Approximate Reasoning 42, 228-252.
         
-        Example 6 (consonant) from:
+        Example 6 (mcd) from:
         A. Aregui, T. Denoeux (2008), "Constructing consonant belief functions from sample data using confidence sets of pignistic probabilities",
         International Journal of Approximate Reasoning 49, 575-594.
         """
         precipitation_data = {1:48, 2:17, 3:19, 4:11, 5:6, 6:9}
         failure_mode_data = {1:5, 2:11, 3:19, 4:30, 5:58, 6:67, 7:92, 8:118, 9:173, 10:297}
         psych_data = {1:91, 2:49, 3:37, 4:43}
-        # default
-        m = MassFunction.from_samples(psych_data, 0.05, mode='default')
+        # maxbel
+        m = MassFunction.from_samples(psych_data, method='maxbel', alpha=0.05)
         p_lower, p_upper = MassFunction._confidence_intervals(psych_data, 0.05)
         def p_lower_set(hs):
             l = u = 0
@@ -495,8 +495,8 @@ class PyDSTest(unittest.TestCase):
         self.assertEqual(1, sum(m.values())) # constraint (25)
         self.assertGreaterEqual(min(m.values()), 0) # constraint (26)
         self.assertGreaterEqual(bel_sum, 6.23) # optimization criterion
-        # ordered
-        m = MassFunction.from_samples(precipitation_data, 0.05, mode='ordered')
+        # maxbel-ordered
+        m = MassFunction.from_samples(precipitation_data, method='maxbel-ordered', alpha=0.05)
         self.assertAlmostEqual(0.32,  m[(1,)], 2)
         self.assertAlmostEqual(0.085, m[(2,)], 3)
         self.assertAlmostEqual(0.098, m[(3,)], 3)
@@ -507,18 +507,23 @@ class PyDSTest(unittest.TestCase):
         self.assertAlmostEqual(0.11,  m[range(1, 6)], 2)
         self.assertAlmostEqual(0.012, m[range(2, 6)], 2)
         self.assertAlmostEqual(0.14,  m[range(2, 7)], 2)
-        # consonant
+        # mcd
         poss = {1: 0.171, 2: 0.258, 3: 0.353, 4: 0.462, 5: 0.688, 6: 0.735, 7: 0.804, 8: 0.867, 9: 0.935, 10: 1.0} # 8: 0.873
-        m = MassFunction.from_samples(failure_mode_data, 0.1, mode='consonant') 
+        m = MassFunction.from_samples(failure_mode_data, method='mcd', alpha=0.1) 
         self._assert_equal_belief(MassFunction.from_possibility(poss), m, 1)
-        # consonant-approximate
-        m = MassFunction.from_samples(failure_mode_data, 0.1, mode='consonant-approximate')
+        # mcd-approximate
+        m = MassFunction.from_samples(failure_mode_data, method='mcd-approximate', alpha=0.1)
         poss = {1: 0.171, 2: 0.258, 3: 0.353, 4: 0.462, 5: 0.688, 6: 0.747, 7: 0.875, 8: 0.973, 9: 1.0, 10: 1.0} 
         self._assert_equal_belief(MassFunction.from_possibility(poss), m, 2)
         # bayesian
-        m = MassFunction.from_samples(precipitation_data, 0.05, mode='bayesian')
+        m = MassFunction.from_samples(precipitation_data, method='bayesian', s=0)
         for e, n in precipitation_data.items():
-            self.assertEqual(n / float(sum(precipitation_data.values())), m[(e,)]) 
+            self.assertEqual(n / float(sum(precipitation_data.values())), m[(e,)])
+        # idm
+        m = MassFunction.from_samples(precipitation_data, method='idm', s=1)
+        self.assertAlmostEqual(1. / float(sum(precipitation_data.values()) + 1), m[MassFunction._convert(precipitation_data.keys())])
+        for e, n in precipitation_data.items():
+            self.assertAlmostEqual(n / float(sum(precipitation_data.values()) + 1), m[(e,)])
     
     def test_powerset(self):
         s = range(2)
