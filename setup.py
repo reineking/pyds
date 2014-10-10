@@ -6,11 +6,11 @@ with open('README') as f:
 
 
 setup(
-      name = 'pyds',
+      name = 'py_dempster_shafer',
       version = '0.7',
       description = 'Dempster-Shafer theory library',
       author = 'Thomas Reineking',
-      author_email = '',
+      author_email = 'nikenier@gmail.com',
       py_modules = ['pyds'],
       url = 'https://github.com/reineking/pyds',
       long_description=long_description,
