@@ -508,11 +508,14 @@ class MassFunction(dict):
         Returns infinity in case the mass functions are flatly contradicting.
         """
         # compute full conjunctive combination (could be more efficient)
-        c = self.combine_conjunctive(mass_function, normalization=False, sample_count=sample_count)[frozenset()]
-        if c >= 1.0 - 1E-8:
-            return float("inf")
+        m = self.combine_conjunctive(mass_function, normalization=False, sample_count=sample_count)
+        empty = m[frozenset()]
+        m_sum = fsum(m.values())
+        diff = m_sum - empty
+        if diff == 0.0:
+            return float('inf')
         else:
-            return -log(1.0 - c)
+            return -log(diff)
     
     def normalize(self):
         """
