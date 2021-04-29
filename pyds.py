@@ -179,7 +179,7 @@ class MassFunction(dict):
         'hypothesis' is automatically converted to a 'frozenset' meaning its elements must be hashable.
         In case of a negative mass value, a ValueError is raised.
         """
-        if value < 0.0:
+        if value < 0.0:  
             raise ValueError("mass value is negative: %f" % value)
         dict.__setitem__(self, MassFunction._convert(hypothesis), value)
     
@@ -285,6 +285,22 @@ class MassFunction(dict):
                 return 1.0
             else:
                 return fsum([v for (h, v) in self.items() if h.issuperset(hypothesis)])
+
+
+    def discount(self, alpha):
+        """
+        Discount a mass function from a source that is partially reliable to a known reliability degree 1-alpha.
+        Introduced by Shafer in A Mathematical Theory of Evidence.
+        """
+        discounted = MassFunction()
+        for (h,v) in self.items() :
+            if h == self.frame():
+                discounted[h] = v * (1 - alpha) + alpha 
+            else:
+                discounted[h] = v * (1-alpha)
+
+        return discounted
+
     
     def __and__(self, mass_function):
         """Shorthand for 'combine_conjunctive(mass_function)'."""
@@ -335,7 +351,7 @@ class MassFunction(dict):
                     weights[h] = q_even / q_odd
         return weights
     
-    def combine_conjunctive(self, mass_function, normalization=True, sample_count=None, importance_sampling=False):
+    def combine_conjunctive(self, mass_function, normalization=True, sample_count=None, importance_sampling=False, yager=False , hybride=False, pcr=False):
         """
         Conjunctively combines the mass function with another mass function and returns the combination as a new mass function.
         
@@ -352,8 +368,45 @@ class MassFunction(dict):
         If importance_sampling=True, importance sampling is used to avoid empty intersections, which leads to a lower approximation error but is also slower.
         This method should be used if there is significant evidential conflict between the mass functions.
         """
-        return self._combine(mass_function, rule=lambda s1, s2: s1 & s2, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling)
+        return self._combine(mass_function, rule=lambda s1, s2: s1 & s2, normalization=normalization, sample_count=sample_count, importance_sampling=importance_sampling, yager = yager , hybride=hybride, pcr=pcr)
     
+    def combine_Smets(self, mass_function):
+        """Conjunctive combination for non exhaustive frames of discernment"""
+        return self.combine_conjunctive(mass_function,normalization=False)
+
+    def combine_Yager(self, mass_function):
+        """
+        Conjunctively combines the mass function with another mass function and normalizes it according to Yager's distribution of global conflict
+
+        For more details, see: 
+        R.R. Yager, On the Dempster–Shafer framework and new combination rules,Inform. Sci. 41 (1987) 93–137.
+        """
+        return self.combine_conjunctive(mass_function,normalization=False, yager=True)
+
+    def combine_Hybride(self, mass_function):
+        """
+        Conjunctively combines the mass function with another mass function and normalizes it according to Dubois and Prade's distribution of global conflict 
+        Where the weight of a partial conflict between two focal elements B and C is distributed to a new focal element built upon the union of Band C
+        
+        For more details, see: 
+        D. Dubois, H. Prade, Representation and combination of uncertainty with belief functions and possibility measures, Comput. Intell. 4 (1988) 244–264.
+        """
+        return self.combine_conjunctive(mass_function,normalization=False, hybride=True)
+
+    def combine_Pcr(self, mass_function):
+        """
+        Conjunctively combines the mass function with another mass function and normalizes it according to Smarandache and Dezert’s PCR5 rule,
+        Their principle is to distribute the partial conflicts among the focal elements themselves involved in the partial conflict,
+        rather than to their union as in the Hybride rule.
+
+        For more details, see: 
+        F. Smarandache, J. Dezert, Proportional conflict redistribution rules for information fusion, in: Florentin Smarandache, Jean Dezert (Eds.),
+        Advances and Applications of DSmT for Information Fusion (Collected works), Vol. 2,American Research Press, Rehoboth, 2006, pp. 3–68.
+        """
+        return self.combine_conjunctive(mass_function,normalization=False, pcr=True)
+    
+
+
     def combine_disjunctive(self, mass_function, sample_count=None):
         """
         Disjunctively combines the mass function with another mass function and returns the combination as a new mass function.
@@ -383,7 +436,7 @@ class MassFunction(dict):
             m = m.combine_conjunctive(m_simple, normalization=False)
         return m
     
-    def _combine(self, mass_function, rule, normalization, sample_count, importance_sampling):
+    def _combine(self, mass_function, rule, normalization, sample_count, importance_sampling , yager=False, hybride=False, pcr=False):
         """Helper method for combining two or more mass functions."""
         combined = self
         if isinstance(mass_function, MassFunction):
@@ -392,7 +445,7 @@ class MassFunction(dict):
             if not isinstance(m, MassFunction):
                 raise TypeError("expected type MassFunction but got %s; make sure to use keyword arguments for anything other than mass functions" % type(m))
             if sample_count == None:
-                combined = combined._combine_deterministic(m, rule)
+                combined = combined._combine_deterministic(m, rule, hybride=hybride, pcr=pcr)
             else:
                 if importance_sampling and normalization:
                     combined = combined._combine_importance_sampling(m, sample_count)
@@ -400,15 +453,26 @@ class MassFunction(dict):
                     combined = combined._combine_direct_sampling(m, rule, sample_count)
         if normalization:
             return combined.normalize()
+        elif yager :
+            combined[combined.frame()] += combined[frozenset()]
+            del combined[frozenset()]
+            return combined
         else:
             return combined
     
-    def _combine_deterministic(self, mass_function, rule):
+    def _combine_deterministic(self, mass_function, rule , hybride=False, pcr=False):
         """Helper method for deterministically combining two mass functions."""
         combined = MassFunction()
         for (h1, v1) in self.items():
             for (h2, v2) in mass_function.items():
-                combined[rule(h1, h2)] += v1 * v2
+                if (rule(h1,h2) == frozenset()) and hybride:
+                    combined[h1 | h2] += v1 * v2
+                elif (rule(h1,h2) == frozenset()) and pcr :
+                    nullDenominator = (h2 not in self ) and (h1 not in mass_function)
+                    combined[h1] += (((v1**2) * v2) / (v1 + v2)) + ( 0 if nullDenominator else ((self.get(h2,0)*(mass_function.get(h1,0)**2)) / (self.get(h2,0) + (mass_function.get(h1,0)))))
+                    combined[h2] += (((v2**2) * v1) / (v1 + v2)) + ( 0 if nullDenominator else (((self.get(h2,0)**2)*mass_function.get(h1,0)) / (self.get(h2,0) + (mass_function.get(h1,0)))))
+                else:
+                    combined[rule(h1, h2)] += v1 * v2
         return combined
     
     def _combine_direct_sampling(self, mass_function, rule, sample_count):
