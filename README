@@ -1,3 +1,6 @@
+This repository is unmaintained. In general please consider probabilistic alternatives with a more solid theoretical foundation.
+
+
 A Python library for performing calculations in the Dempster-Shafer theory of evidence.
 
 Features:
